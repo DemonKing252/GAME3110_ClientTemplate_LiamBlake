@@ -6,111 +6,122 @@ using UnityEngine.Networking;
 
 public class NetworkedClient : MonoBehaviour
 {
+    public int MaxConnections = 16;
 
-    int connectionID;
-    int maxConnections = 1000;
-    int reliableChannelID;
-    int unreliableChannelID;
-    int hostID;
-    int socketPort = 5491;
-    byte error;
-    bool isConnected = false;
-    int ourClientID;
+    // Message is guaranteed however it may not be in order
+    public int ReliableConnection;
 
-    // Start is called before the first frame update
-    void Start()
+    // Message is not guaranteed, may not be in order (thus the name 'unreliable')
+    public int UnrealiableConnection;
+
+    public int port = 5491;
+
+    public int hostID;
+    public int connectionID;
+    public byte errors;
+    public bool connected = false;
+
+    private void Start()
     {
-        Connect();
+        // TODO: 
+        // 1. Establish a connection
+        // 2. Print a message when a client joins
+
+        TryConnection();
+
     }
 
-    // Update is called once per frame
-    void Update()
+    private void Update()
     {
-        if(Input.GetKeyDown(KeyCode.S))
-            SendMessageToHost("Hello from client");
-
-        UpdateNetworkConnection();
+        HandleMessages();
     }
 
-    private void UpdateNetworkConnection()
+    private void HandleMessages()
     {
-        if (isConnected)
+        if (Input.GetKey(KeyCode.S))
         {
-            int recHostID;
-            int recConnectionID;
-            int recChannelID;
-            byte[] recBuffer = new byte[1024];
-            int bufferSize = 1024;
-            int dataSize;
-            NetworkEventType recNetworkEvent = NetworkTransport.Receive(out recHostID, out recConnectionID, out recChannelID, recBuffer, bufferSize, out dataSize, out error);
-
-            switch (recNetworkEvent)
+            if (connected)
             {
-                case NetworkEventType.ConnectEvent:
-                    Debug.Log("connected.  " + recConnectionID);
-                    ourClientID = recConnectionID;
-                    break;
-                case NetworkEventType.DataEvent:
-                    string msg = Encoding.Unicode.GetString(recBuffer, 0, dataSize);
-                    ProcessRecievedMsg(msg, recConnectionID);
-                    //Debug.Log("got msg = " + msg);
-                    break;
-                case NetworkEventType.DisconnectEvent:
-                    isConnected = false;
-                    Debug.Log("disconnected.  " + recConnectionID);
-                    break;
+                string strmessage = "Hello from client";
+                byte[] msgbyte = Encoding.ASCII.GetBytes(strmessage);
+
+
+                NetworkTransport.Send(hostID, connectionID, ReliableConnection, msgbyte, msgbyte.Length, out errors);
             }
         }
-    }
-    
-    private void Connect()
-    {
 
-        if (!isConnected)
+
+
+
+
+        int recHostID;
+        int recConnectionID;
+        int recChannelID;
+        byte[] recBuffer = new byte[1024];
+        int bufferSize = 1024;
+        int dataSize;
+        byte error = 0;
+
+        NetworkEventType recNetworkEvent = NetworkTransport.Receive(out recHostID,
+            out recConnectionID,
+            out recChannelID,
+            recBuffer,
+            bufferSize,
+            out dataSize,
+            out error);
+
+        switch (recNetworkEvent)
         {
-            Debug.Log("Attempting to create connection");
+            //case NetworkEventType.ConnectEvent:
+            //    Debug.Log("Connecting to server . . .");
+            //    //Debug.Log("Client connecting: " + recConnectionID.ToString());
+            //    break;
+            case NetworkEventType.DataEvent:
 
-            NetworkTransport.Init();
+                // Do what you want with data here:
+                print("Client says: " + Encoding.ASCII.GetString(recBuffer));
 
-            ConnectionConfig config = new ConnectionConfig();
-            reliableChannelID = config.AddChannel(QosType.Reliable);
-            unreliableChannelID = config.AddChannel(QosType.Unreliable);
-            HostTopology topology = new HostTopology(config, maxConnections);
-            hostID = NetworkTransport.AddHost(topology, 0);
-            Debug.Log("Socket open.  Host ID = " + hostID);
-
-            connectionID = NetworkTransport.Connect(hostID, "192.168.50.75", socketPort, 0, out error); // server is local on network
-
-            if (error == 0)
-            {
-                isConnected = true;
-
-                Debug.Log("Connected, id = " + connectionID);
-
-            }
+                break;
+            //case NetworkEventType.DisconnectEvent:
+            //
+            //    Debug.Log("Connecting to server . . .");
+            //    //Debug.Log("Client disconnecting: " + recConnectionID.ToString());
+            //    break;
         }
-    }
-    
-    public void Disconnect()
-    {
-        NetworkTransport.Disconnect(hostID, connectionID, out error);
-    }
-    
-    public void SendMessageToHost(string msg)
-    {
-        byte[] buffer = Encoding.Unicode.GetBytes(msg);
-        NetworkTransport.Send(hostID, connectionID, reliableChannelID, buffer, msg.Length * sizeof(char), out error);
-    }
-
-    private void ProcessRecievedMsg(string msg, int id)
-    {
-        Debug.Log("msg recieved = " + msg + ".  connection id = " + id);
-    }
-
-    public bool IsConnected()
-    {
-        return isConnected;
-    }
 
 
+    }
+
+    private void TryConnection()
+    {
+        NetworkTransport.Init();
+
+        ConnectionConfig config = new ConnectionConfig();
+
+        // https://docs.unity3d.com/ScriptReference/Networking.QosType.html
+
+        // Quality of service: Messages are guaranteed, but may not be in order
+        ReliableConnection = config.AddChannel(QosType.Reliable);
+
+        // Quality of service: Messages are not guaranteed, and may not be in order
+        UnrealiableConnection = config.AddChannel(QosType.Unreliable);
+
+        /*
+        Host topology: 
+        (1) how many connection with default config will be supported
+        (2) what will be special connections (connections with config different from default). 
+         
+        */
+
+        HostTopology hostTop = new HostTopology(config, MaxConnections);
+        hostID = NetworkTransport.AddHost(hostTop, 0); // ip is left out since this is the server
+
+        connectionID = NetworkTransport.Connect(hostID, "192.168.50.75", port, 0, out errors);
+
+        if (errors == 0)
+        {
+            connected = true;
+        }
+
+    }
 }
