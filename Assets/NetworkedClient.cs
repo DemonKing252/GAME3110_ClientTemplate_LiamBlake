@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.UI;
 
 public class NetworkedClient : MonoBehaviour
 {
@@ -20,6 +21,8 @@ public class NetworkedClient : MonoBehaviour
     public int connectionID;
     public byte errors;
     public bool connected = false;
+
+    public Text latestMessage;
 
     private void Start()
     {
@@ -42,8 +45,8 @@ public class NetworkedClient : MonoBehaviour
         {
             if (connected)
             {
-                string strmessage = "Hello from client";
-                byte[] msgbyte = Encoding.ASCII.GetBytes(strmessage);
+                string strmessage = string.Format("Hello from client host id: {0}, connection id: {1}", hostID, connectionID);
+                byte[] msgbyte = Encoding.Unicode.GetBytes(strmessage);
 
 
                 NetworkTransport.Send(hostID, connectionID, ReliableConnection, msgbyte, msgbyte.Length, out errors);
@@ -72,23 +75,36 @@ public class NetworkedClient : MonoBehaviour
 
         switch (recNetworkEvent)
         {
-            //case NetworkEventType.ConnectEvent:
-            //    Debug.Log("Connecting to server . . .");
-            //    //Debug.Log("Client connecting: " + recConnectionID.ToString());
-            //    break;
+            case NetworkEventType.ConnectEvent:
+                //Debug.Log("Connecting to server . . .");
+                latestMessage.text = "Client connecting: " + recConnectionID.ToString();
+
+                //Debug.Log("Client connecting: " + recConnectionID.ToString());
+                break;
             case NetworkEventType.DataEvent:
 
+
+                latestMessage.text = "Server says: " + Encoding.Unicode.GetString(recBuffer);
+
                 // Do what you want with data here:
-                print("Client says: " + Encoding.ASCII.GetString(recBuffer));
+                print("Client says: " + Encoding.Unicode.GetString(recBuffer));
 
                 break;
-            //case NetworkEventType.DisconnectEvent:
-            //
-            //    Debug.Log("Connecting to server . . .");
-            //    //Debug.Log("Client disconnecting: " + recConnectionID.ToString());
-            //    break;
+            case NetworkEventType.DisconnectEvent:
+                latestMessage.text = "Client connecting: " + recConnectionID.ToString();
+
+                //Debug.Log("Connecting to server . . .");
+                //Debug.Log("Client disconnecting: " + recConnectionID.ToString());
+                break;
         }
 
+
+    }
+    private void OnApplicationQuit()
+    {
+        string str = "Good bye from client!";
+        byte[] buffer = Encoding.Unicode.GetBytes(str);
+        NetworkTransport.Send(hostID, connectionID, ReliableConnection, buffer, buffer.Length, out errors);
 
     }
 
@@ -114,7 +130,7 @@ public class NetworkedClient : MonoBehaviour
         */
 
         HostTopology hostTop = new HostTopology(config, MaxConnections);
-        hostID = NetworkTransport.AddHost(hostTop, 0); // ip is left out since this is the server
+        hostID = NetworkTransport.AddHost(hostTop, 0); 
 
         connectionID = NetworkTransport.Connect(hostID, "192.168.50.75", port, 0, out errors);
 
