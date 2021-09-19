@@ -39,6 +39,8 @@ public class NetworkedClient : MonoBehaviour
         HandleMessages();
     }
 
+    private bool isConnected = false;
+
     private void HandleMessages()
     {
         if (Input.GetKey(KeyCode.S))
@@ -134,10 +136,17 @@ public class NetworkedClient : MonoBehaviour
 
         connectionID = NetworkTransport.Connect(hostID, "192.168.50.75", port, 0, out errors);
 
-        if (errors == 0)
+
+        if ((NetworkError)errors == NetworkError.Ok)
         {
+            Debug.Log("Connected!");
             connected = true;
         }
+        else
+        {
+            connected = false;
+            Debug.LogError("NetworkedClient.cs: Could not connect to server!, error type: " + (NetworkError)errors);
 
+        }
     }
 }
