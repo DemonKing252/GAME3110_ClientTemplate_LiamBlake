@@ -7,146 +7,166 @@ using UnityEngine.UI;
 
 public class NetworkedClient : MonoBehaviour
 {
-    public int MaxConnections = 16;
 
-    // Message is guaranteed however it may not be in order
-    public int ReliableConnection;
+    int connectionID;
+    int maxConnections = 1000;
+    int reliableChannelID;
+    int unreliableChannelID;
+    int hostID;
+    int socketPort = 5491;
+    byte error;
+    bool isConnected = false;
+    int ourClientID;
+    public string ip;
 
-    // Message is not guaranteed, may not be in order (thus the name 'unreliable')
-    public int UnrealiableConnection;
+    private GameManager gameMgr;
 
-    public int port = 5491;
-
-    public int hostID;
-    public int connectionID;
-    public byte errors;
-    public bool connected = false;
-
-    public Text latestMessage;
-
-    private void Start()
+    // Start is called before the first frame update
+    void Start()
     {
-        // TODO: 
-        // 1. Establish a connection
-        // 2. Print a message when a client joins
+        gameMgr = FindObjectOfType<GameManager>();
 
-        TryConnection();
-
+        Connect();
     }
 
-    private void Update()
+    // Update is called once per frame
+    void Update()
     {
-        HandleMessages();
+        if (Input.GetKeyDown(KeyCode.S))
+            SendMessageToHost("Hello from client");
+
+        UpdateNetworkConnection();
     }
 
-    private bool isConnected = false;
-
-    private void HandleMessages()
+    private void UpdateNetworkConnection()
     {
-        if (Input.GetKey(KeyCode.S))
+        if (isConnected)
         {
-            if (connected)
+            int recHostID;
+            int recConnectionID;
+            int recChannelID;
+            byte[] recBuffer = new byte[1024];
+            int bufferSize = 1024;
+            int dataSize;
+            NetworkEventType recNetworkEvent = NetworkTransport.Receive(out recHostID, out recConnectionID, out recChannelID, recBuffer, bufferSize, out dataSize, out error);
+
+            switch (recNetworkEvent)
             {
-                string strmessage = string.Format("Hello from client host id: {0}, connection id: {1}", hostID, connectionID);
-                byte[] msgbyte = Encoding.Unicode.GetBytes(strmessage);
-
-
-                NetworkTransport.Send(hostID, connectionID, ReliableConnection, msgbyte, msgbyte.Length, out errors);
+                case NetworkEventType.ConnectEvent:
+                    Debug.Log("connected.  " + recConnectionID);
+                    ourClientID = recConnectionID;
+                    break;
+                case NetworkEventType.DataEvent:
+                    string msg = Encoding.Unicode.GetString(recBuffer, 0, dataSize);
+                    ProcessRecievedMsg(msg, recConnectionID);
+                    //Debug.Log("got msg = " + msg);
+                    break;
+                case NetworkEventType.DisconnectEvent:
+                    isConnected = false;
+                    Debug.Log("disconnected.  " + recConnectionID);
+                    break;
             }
         }
-
-
-
-
-
-        int recHostID;
-        int recConnectionID;
-        int recChannelID;
-        byte[] recBuffer = new byte[1024];
-        int bufferSize = 1024;
-        int dataSize;
-        byte error = 0;
-
-        NetworkEventType recNetworkEvent = NetworkTransport.Receive(out recHostID,
-            out recConnectionID,
-            out recChannelID,
-            recBuffer,
-            bufferSize,
-            out dataSize,
-            out error);
-
-        switch (recNetworkEvent)
-        {
-            case NetworkEventType.ConnectEvent:
-                //Debug.Log("Connecting to server . . .");
-                latestMessage.text = "Client connecting: " + recConnectionID.ToString();
-
-                //Debug.Log("Client connecting: " + recConnectionID.ToString());
-                break;
-            case NetworkEventType.DataEvent:
-
-
-                latestMessage.text = "Server says: " + Encoding.Unicode.GetString(recBuffer);
-
-                // Do what you want with data here:
-                print("Client says: " + Encoding.Unicode.GetString(recBuffer));
-
-                break;
-            case NetworkEventType.DisconnectEvent:
-                latestMessage.text = "Client connecting: " + recConnectionID.ToString();
-
-                //Debug.Log("Connecting to server . . .");
-                //Debug.Log("Client disconnecting: " + recConnectionID.ToString());
-                break;
-        }
-
-
     }
-    private void OnApplicationQuit()
+
+    private void Connect()
     {
-        string str = "Good bye from client!";
-        byte[] buffer = Encoding.Unicode.GetBytes(str);
-        NetworkTransport.Send(hostID, connectionID, ReliableConnection, buffer, buffer.Length, out errors);
 
+        if (!isConnected)
+        {
+            Debug.Log("Attempting to create connection");
+
+            NetworkTransport.Init();
+
+            ConnectionConfig config = new ConnectionConfig();
+            reliableChannelID = config.AddChannel(QosType.Reliable);
+            unreliableChannelID = config.AddChannel(QosType.Unreliable);
+            HostTopology topology = new HostTopology(config, maxConnections);
+            hostID = NetworkTransport.AddHost(topology, 0);
+            Debug.Log("Socket open.  Host ID = " + hostID);
+
+            connectionID = NetworkTransport.Connect(hostID, ip, socketPort, 0, out error); // server is local on network
+
+            if (error == 0)
+            {
+                isConnected = true;
+
+                Debug.Log("Connected, id = " + connectionID);
+
+            }
+        }
     }
 
-    private void TryConnection()
+    public void Disconnect()
     {
-        NetworkTransport.Init();
-
-        ConnectionConfig config = new ConnectionConfig();
-
-        // https://docs.unity3d.com/ScriptReference/Networking.QosType.html
-
-        // Quality of service: Messages are guaranteed, but may not be in order
-        ReliableConnection = config.AddChannel(QosType.Reliable);
-
-        // Quality of service: Messages are not guaranteed, and may not be in order
-        UnrealiableConnection = config.AddChannel(QosType.Unreliable);
-
-        /*
-        Host topology: 
-        (1) how many connection with default config will be supported
-        (2) what will be special connections (connections with config different from default). 
-         
-        */
-
-        HostTopology hostTop = new HostTopology(config, MaxConnections);
-        hostID = NetworkTransport.AddHost(hostTop, 0); 
-
-        connectionID = NetworkTransport.Connect(hostID, "192.168.50.75", port, 0, out errors);
-
-
-        if ((NetworkError)errors == NetworkError.Ok)
-        {
-            Debug.Log("Connected!");
-            connected = true;
-        }
-        else
-        {
-            connected = false;
-            Debug.LogError("NetworkedClient.cs: Could not connect to server!, error type: " + (NetworkError)errors);
-
-        }
+        NetworkTransport.Disconnect(hostID, connectionID, out error);
     }
+
+    public void SendMessageToHost(string msg)
+    {
+        byte[] buffer = Encoding.Unicode.GetBytes(msg);
+        NetworkTransport.Send(hostID, connectionID, reliableChannelID, buffer, msg.Length * sizeof(char), out error);
+    }
+
+    private void ProcessRecievedMsg(string msg, int id)
+    {
+        Debug.Log("msg recieved = " + msg + ".  connection id = " + id);
+
+        string[] data = msg.Split(',');
+
+        int signafier = int.Parse(data[0]);
+
+        if (signafier == ServerToClientSignifier.LoginResponse)
+        {
+            int status = int.Parse(data[1]);
+
+            if (status == LoginResponse.Success)
+            {
+                gameMgr.serverStatus.GetComponent<Text>().text = "Login Successful!";
+                gameMgr.serverStatus.GetComponent<Text>().color = Color.green;
+
+            }
+            else if (status == LoginResponse.WrongName)
+            {
+
+                gameMgr.serverStatus.GetComponent<Text>().text = "That username does not exist!";
+                gameMgr.serverStatus.GetComponent<Text>().color = Color.red;
+
+            }
+            else if (status == LoginResponse.WrongPassword)
+            {
+
+                gameMgr.serverStatus.GetComponent<Text>().text = "Wrong password!";
+                gameMgr.serverStatus.GetComponent<Text>().color = Color.red;
+
+            }
+        }
+        else if (signafier == ServerToClientSignifier.CreateResponse)
+        {
+            int status = int.Parse(data[1]);
+
+            if (status == CreateResponse.Success)
+            {
+                gameMgr.serverStatus.GetComponent<Text>().text = "Create account successful!";
+                gameMgr.serverStatus.GetComponent<Text>().color = Color.green;
+
+            }
+            else if (status == CreateResponse.UsernameTaken)
+            {
+
+                gameMgr.serverStatus.GetComponent<Text>().text = "That username is already taken!";
+                gameMgr.serverStatus.GetComponent<Text>().color = Color.red;
+
+            }
+            
+        }
+        
+    }
+
+    public bool IsConnected()
+    {
+        return isConnected;
+    }
+
+
 }
