@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Networking;
 
 //GameObject[] gos = GameObject.FindObjectsOfType<GameObject>();
 
@@ -32,10 +33,12 @@ public static class ServerToClientSignifier
 {
     public const int LoginResponse = 101;
     public const int CreateResponse = 102;
-    public const int GameSessionStarted = 103;
-    public const int OpponentTicTacToePlay = 104;
 
+    public const int GameSessionStarted = 103;
+
+    public const int OpponentTicTacToePlay = 104;
     public const int UpdateBoardOnClientSide = 105;
+    public const int VerifyConnection = 106;
 
 }
 
@@ -62,6 +65,8 @@ public static class GameStates
     public const int WaitingForMatch = 3;
     
     public const int PlayingTicTacToe = 4;
+
+    public const int ConnectingToHost = 5;
     
 }
 
@@ -74,6 +79,7 @@ public class GameManager : MonoBehaviour
 
     public GameObject createAccountBtn;
     public GameObject loginAccountBtn;
+    public GameObject connectBtn;
 
 
     private NetworkedClient netclient;
@@ -83,6 +89,11 @@ public class GameManager : MonoBehaviour
     public Canvas findSessionUI;
     public Canvas loginUI;
     public Canvas gameUI;
+    public Canvas connectToHostUI;
+    public Text connectionVerificationStatus;
+    public InputField ipaddress;
+    public InputField portNumber;
+
     public char mychar = 'X';
 
     // Start is called before the first frame update
@@ -90,6 +101,7 @@ public class GameManager : MonoBehaviour
     {
         createAccountBtn.GetComponent<Button>().onClick.AddListener(OnCreateAccount);
         loginAccountBtn.GetComponent<Button>().onClick.AddListener(OnLogin);
+        connectBtn.GetComponent<Button>().onClick.AddListener(OnTryConnection);
 
         inputFieldUserName.GetComponent<InputField>().onEndEdit.AddListener(OnInputUser);
         inputFieldPassword.GetComponent<InputField>().onEndEdit.AddListener(OnInputPassword);
@@ -97,9 +109,32 @@ public class GameManager : MonoBehaviour
 
         netclient = FindObjectOfType<NetworkedClient>();
 
+        ChangeGameState(GameStates.ConnectingToHost);
+
     }
     private string user;
     private string password;
+    public bool connectionSuccessful = false;
+
+    public void OnTryConnection()
+    {
+        connectionVerificationStatus.text = "Trying to connect . . .";
+        connectionVerificationStatus.color = Color.white;
+        netclient.Connect(ipaddress.text, int.Parse(portNumber.text));
+        // time out of 3 seconds
+        Invoke("_VerifyConnection", 3f);
+    }
+    public void _VerifyConnection()
+    {
+        if (!connectionSuccessful)
+        {
+            NetworkTransport.Shutdown();
+
+            connectionVerificationStatus.text = "Error: Unknown host!";
+            connectionVerificationStatus.color = Color.red;
+
+        }
+    }
 
     public void OnUpdateBoard()
     {
@@ -151,12 +186,14 @@ public class GameManager : MonoBehaviour
             findSessionUI.gameObject.SetActive(false);
             loginUI.gameObject.SetActive(true);
             gameUI.gameObject.SetActive(false);
+            connectToHostUI.gameObject.SetActive(false);
         }
         else if (newState == GameStates.MainMenu)
         {
             findSessionUI.gameObject.SetActive(false);
             loginUI.gameObject.SetActive(true);
             gameUI.gameObject.SetActive(false);
+            connectToHostUI.gameObject.SetActive(false);
 
         }
         else if (newState == GameStates.WaitingForMatch)
@@ -164,12 +201,21 @@ public class GameManager : MonoBehaviour
             findSessionUI.gameObject.SetActive(true);
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
+            connectToHostUI.gameObject.SetActive(false);
         }
         else if (newState == GameStates.PlayingTicTacToe)
         {
             findSessionUI.gameObject.SetActive(false);
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(true);
+            connectToHostUI.gameObject.SetActive(false);
+        }
+        else if (newState == GameStates.ConnectingToHost)
+        {
+            findSessionUI.gameObject.SetActive(false);
+            loginUI.gameObject.SetActive(false);
+            gameUI.gameObject.SetActive(false);
+            connectToHostUI.gameObject.SetActive(true);
         }
     }
 

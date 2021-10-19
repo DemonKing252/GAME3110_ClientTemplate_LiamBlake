@@ -36,28 +36,26 @@ public class NetworkedClient : MonoBehaviour
     private GameManager gameMgr;
 
     public Button onfindsessionbtn;
-    public Button makeplaybtn;
     public Text sessionstatus;
+    public Text gameroomstatus;
     public BoardView board = new BoardView();
     // Start is called before the first frame update
     void Start()
     {
         gameMgr = FindObjectOfType<GameManager>();
         onfindsessionbtn.onClick.AddListener(OnFindSession);
-        makeplaybtn.onClick.AddListener(OnMakePlay);
 
-        Connect();
     }
     public void OnFindSession()
     {
         Debug.Log("Finding session . . .");
         SendMessageToHost(ClientToServerSignifier.AddToGameSessionQueue.ToString() + ",");
+
+        gameroomstatus.gameObject.SetActive(true);
+        onfindsessionbtn.gameObject.SetActive(false);
+
         gameMgr.ChangeGameState(GameStates.WaitingForMatch);
 
-    }
-    public void OnMakePlay()
-    {
-        Debug.Log("Making play . . .");
     }
     // Update is called once per frame
     void Update()
@@ -80,34 +78,38 @@ public class NetworkedClient : MonoBehaviour
             int dataSize;
             NetworkEventType recNetworkEvent = NetworkTransport.Receive(out recHostID, out recConnectionID, out recChannelID, recBuffer, bufferSize, out dataSize, out error);
 
-            switch (recNetworkEvent)
+            if (error == 0)
             {
-                case NetworkEventType.ConnectEvent:
-                    Debug.Log("connected.  " + recConnectionID);
-                    ourClientID = recConnectionID;
-                    break;
-                case NetworkEventType.DataEvent:
-                    string msg = Encoding.Unicode.GetString(recBuffer, 0, dataSize);
-                    ProcessRecievedMsg(msg, recConnectionID);
-                    //Debug.Log("got msg = " + msg);
-                    break;
-                case NetworkEventType.DisconnectEvent:
-                    isConnected = false;
-                    Debug.Log("disconnected.  " + recConnectionID);
-                    break;
+                switch (recNetworkEvent)
+                {
+                    case NetworkEventType.ConnectEvent:
+                        Debug.Log("connected.  " + recConnectionID);
+                        ourClientID = recConnectionID;
+                        break;
+                    case NetworkEventType.DataEvent:
+                        string msg = Encoding.Unicode.GetString(recBuffer, 0, dataSize);
+                        ProcessRecievedMsg(msg, recConnectionID);
+                        //Debug.Log("got msg = " + msg);
+                        break;
+                    case NetworkEventType.DisconnectEvent:
+                        isConnected = false;
+                        Debug.Log("disconnected.  " + recConnectionID);
+                        break;
+                }
             }
+            
         }
     }
 
-    private void Connect()
+    public void Connect(string ip_address, int port)
     {
 
-        if (!isConnected)
+        //if (!isConnected)
         {
             Debug.Log("Attempting to create connection");
 
             NetworkTransport.Init();
-
+            
             ConnectionConfig config = new ConnectionConfig();
             reliableChannelID = config.AddChannel(QosType.Reliable);
             unreliableChannelID = config.AddChannel(QosType.Unreliable);
@@ -115,7 +117,10 @@ public class NetworkedClient : MonoBehaviour
             hostID = NetworkTransport.AddHost(topology, 0);
             Debug.Log("Socket open.  Host ID = " + hostID);
 
-            connectionID = NetworkTransport.Connect(hostID, ip, socketPort, 0, out error); // server is local on network
+            connectionID = NetworkTransport.Connect(hostID, ip_address, port, 0, out error); // server is local on network
+
+            ip = ip_address;
+            socketPort = port;
 
             if (error == 0)
             {
@@ -210,6 +215,11 @@ public class NetworkedClient : MonoBehaviour
             {
                 Debug.LogError("Error when updating board on client: " + e.Message);
             }
+        }
+        else if (signafier == ServerToClientSignifier.VerifyConnection)
+        {
+            gameMgr.connectionSuccessful = true;
+            gameMgr.ChangeGameState(GameStates.Login);
         }
     }
     public void SetServerStatus(string txt, Color col)
