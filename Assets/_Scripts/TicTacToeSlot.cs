@@ -9,14 +9,21 @@ public class TicTacToeSlot : MonoBehaviour
     private Button slotbtn;
     private Text displayText;
     private GameManager gameMgr = null;
+    private NetworkedClient netclient;
     public char characterinslot = ' ';
 
     // Start is called before the first frame update
     public void OnClicked()
     {
-        characterinslot = gameMgr.mychar;
-        displayText.text = characterinslot.ToString();
-        gameMgr.OnUpdateBoard();
+        if (gameMgr.mychar == gameMgr.playersturn && characterinslot == ' ')
+        {
+
+            characterinslot = gameMgr.mychar;
+            displayText.text = characterinslot.ToString();
+            gameMgr.OnUpdateBoard();
+            
+            
+        }
     }
     public void SetSlot(string value)
     {
@@ -30,13 +37,9 @@ public class TicTacToeSlot : MonoBehaviour
         slotbtn = GetComponent<Button>();
         displayText = GetComponentInChildren<Text>();
         gameMgr = FindObjectOfType<GameManager>();
+        netclient = FindObjectOfType<NetworkedClient>();
 
         slotbtn.onClick.AddListener(OnClicked);
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
 }

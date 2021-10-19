@@ -190,13 +190,19 @@ public class NetworkedClient : MonoBehaviour
         else if (signafier == ServerToClientSignifier.GameSessionStarted)
         {
             gameMgr.ChangeGameState(GameStates.PlayingTicTacToe);
-            sessionstatus.text = "We are ready: " + data[1];
+            //sessionstatus.text = "We are ready: " + data[1];
             gameMgr.mychar = data[2][0];
+            gameMgr.playersturn = data[3][0];
+
+            if (gameMgr.mychar == gameMgr.playersturn)
+                SetSessionStatus("Its your turn, pick a slot!", Color.white);
+            else
+                SetSessionStatus("Waiting on player to pick a slot...", Color.white);
             //Debug.Log("WE ARE READY");
         }
         else if (signafier == ServerToClientSignifier.OpponentTicTacToePlay)
         {
-            sessionstatus.text = data[1];
+            //sessionstatus.text = data[1];
             //Debug.Log("OPPONENT TIC TAC TOE PLAY");
         }
         else if (signafier == ServerToClientSignifier.UpdateBoardOnClientSide)
@@ -204,17 +210,60 @@ public class NetworkedClient : MonoBehaviour
             try
             {
 
-                int index = 1;
+                int index = 2;
                 for (int i = 0; i < 9; i++)
                 {
                     board.slots[i].SetSlot(data[index]);
                     index++;
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Debug.LogError("Error when updating board on client: " + e.Message);
             }
+
+
+            gameMgr.playersturn = data[1][0];   // parsing to char is just a matter of using string at index whatever
+
+            // check if there is a final outcome
+            GameResult result = gameMgr.CheckGameResult();
+
+            switch(result)
+            {
+                case GameResult.PlayerX:
+                    Debug.Log("here 1");
+                    if (gameMgr.mychar == 'X')
+                        SetSessionStatus("You win!", Color.white);
+                    else
+                        SetSessionStatus("You lose!", Color.white);
+                    break;
+
+                case GameResult.PlayerO:
+                    Debug.Log("here 2");
+                    if (gameMgr.mychar == 'O')
+                        SetSessionStatus("You win!", Color.white);
+                    else
+                        SetSessionStatus("You lose!", Color.white);
+                    break;
+                    
+                case GameResult.Tie:
+                    Debug.Log("here 3");
+
+                    SetSessionStatus("Its a tie game!", Color.white);
+                    break;
+
+                case GameResult.NothingDetermined:
+
+                    Debug.Log("here 4");
+                    if (gameMgr.mychar == gameMgr.playersturn)
+                        SetSessionStatus("Its your turn, pick a slot!", Color.white);
+                    else
+                        SetSessionStatus("Waiting on player to pick a slot...", Color.white);
+
+                    break;
+            }
+
+            
         }
         else if (signafier == ServerToClientSignifier.VerifyConnection)
         {
@@ -222,6 +271,15 @@ public class NetworkedClient : MonoBehaviour
             gameMgr.ChangeGameState(GameStates.Login);
         }
     }
+
+    // we have white as a default parameter because this a general message
+    public void SetSessionStatus(string txt, Color col)
+    {
+        sessionstatus.text = txt;
+        sessionstatus.color = col;
+    }
+
+    // this function is used for notifying the player about authentication
     public void SetServerStatus(string txt, Color col)
     {
         gameMgr.serverStatus.GetComponent<Text>().text = txt;

@@ -70,6 +70,14 @@ public static class GameStates
     
 }
 
+public enum GameResult
+{
+    PlayerX,
+    PlayerO,
+    Tie,
+    NothingDetermined
+
+}
 
 
 public class GameManager : MonoBehaviour
@@ -80,7 +88,7 @@ public class GameManager : MonoBehaviour
     public GameObject createAccountBtn;
     public GameObject loginAccountBtn;
     public GameObject connectBtn;
-
+    public GameResult winner;
 
     private NetworkedClient netclient;
 
@@ -95,6 +103,7 @@ public class GameManager : MonoBehaviour
     public InputField portNumber;
 
     public char mychar = 'X';
+    public char playersturn = 'X';
 
     // Start is called before the first frame update
     void Start()
@@ -121,11 +130,14 @@ public class GameManager : MonoBehaviour
         connectionVerificationStatus.text = "Trying to connect . . .";
         connectionVerificationStatus.color = Color.white;
         netclient.Connect(ipaddress.text, int.Parse(portNumber.text));
+        
         // time out of 3 seconds
         Invoke("_VerifyConnection", 3f);
     }
     public void _VerifyConnection()
     {
+        // Destroy network transport objects, and reinitialize and try for 
+        // another connection when the client enters a new ip and/or port
         if (!connectionSuccessful)
         {
             NetworkTransport.Shutdown();
@@ -135,7 +147,88 @@ public class GameManager : MonoBehaviour
 
         }
     }
+    public GameResult CheckGameResult()
+    {
+        BoardView b = netclient.board;
+        int column = 0;
+        for(int i = 0; i < 9; i+=3)
+        {
+            // ----------------------- X player -----------------------
+            // horizontal check
+            if (b.slots[i  ].characterinslot == 'X' &&
+                b.slots[i+1].characterinslot == 'X' &&
+                b.slots[i+2].characterinslot == 'X')
+            {
+                return GameResult.PlayerX;
+            }
+            
+            // horizontal check
+            else if 
+               (b.slots[    column].characterinslot == 'X' &&
+                b.slots[3 + column].characterinslot == 'X' &&
+                b.slots[6 + column].characterinslot == 'X')
+            {
+                return GameResult.PlayerX;
+            }
+            // --------------------------------------------------------
 
+
+            // ----------------------- O player -----------------------
+            if (b.slots[i].characterinslot == 'O' &&
+                b.slots[i + 1].characterinslot == 'O' &&
+                b.slots[i + 2].characterinslot == 'O')
+            {
+                return GameResult.PlayerO;
+            }
+
+            // vertical check
+            else if
+               (b.slots[column].characterinslot == 'O' &&
+                b.slots[3 + column].characterinslot == 'O' &&
+                b.slots[6 + column].characterinslot == 'O')
+            {
+                return GameResult.PlayerO;
+            }
+
+            // --------------------------------------------------------
+            column++;
+        }
+        // --------------------------------------------------------
+
+        // ----------------------- X player -----------------------
+        // diagonal check Top left - bottom right
+        if (b.slots[0].characterinslot == 'X' && b.slots[4].characterinslot == 'X' && b.slots[8].characterinslot == 'X')
+            return GameResult.PlayerX;
+
+        // diagonal check Top right - bottom left
+        else if (b.slots[2].characterinslot == 'X' && b.slots[4].characterinslot == 'X' && b.slots[6].characterinslot == 'X')
+            return GameResult.PlayerX;
+
+        // --------------------------------------------------------
+
+        // ----------------------- O player -----------------------
+        // diagonal check Top left - bottom right
+
+        if (b.slots[0].characterinslot == 'O' && b.slots[4].characterinslot == 'O' && b.slots[8].characterinslot == 'O')
+            return GameResult.PlayerO;
+
+        // diagonal check Top right - bottom left
+        else if (b.slots[2].characterinslot == 'O' && b.slots[4].characterinslot == 'O' && b.slots[6].characterinslot == 'O')
+            return GameResult.PlayerO;
+
+
+        // --------------------------------------------------------
+        // else is it a tie game?
+        bool tiegame = true;
+        for (int i = 0; i < 9; i++)
+            if (b.slots[i].characterinslot == ' ')
+                tiegame = false;
+
+        if (tiegame)
+            return GameResult.Tie;
+
+        return GameResult.NothingDetermined;
+    }
     public void OnUpdateBoard()
     {
         string message = ClientToServerSignifier.UpdateBoard + ",";
