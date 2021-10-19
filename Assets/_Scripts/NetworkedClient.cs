@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
@@ -5,8 +6,21 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
 
+[System.Serializable]
+public class BoardView
+{
+    public List<TicTacToeSlot> slots;
+
+
+    public void Refresh()
+    {
+
+    }
+}
+
 public class NetworkedClient : MonoBehaviour
 {
+
 
     int connectionID;
     int maxConnections = 1000;
@@ -21,19 +35,35 @@ public class NetworkedClient : MonoBehaviour
 
     private GameManager gameMgr;
 
+    public Button onfindsessionbtn;
+    public Button makeplaybtn;
+    public Text sessionstatus;
+    public BoardView board = new BoardView();
     // Start is called before the first frame update
     void Start()
     {
         gameMgr = FindObjectOfType<GameManager>();
+        onfindsessionbtn.onClick.AddListener(OnFindSession);
+        makeplaybtn.onClick.AddListener(OnMakePlay);
 
         Connect();
     }
+    public void OnFindSession()
+    {
+        Debug.Log("Finding session . . .");
+        SendMessageToHost(ClientToServerSignifier.AddToGameSessionQueue.ToString() + ",");
+        gameMgr.ChangeGameState(GameStates.WaitingForMatch);
 
+    }
+    public void OnMakePlay()
+    {
+        Debug.Log("Making play . . .");
+    }
     // Update is called once per frame
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.S))
-            SendMessageToHost("Hello from client");
+            SendMessageToHost(ClientToServerSignifier.TicTacToePlay + ",");
 
         UpdateNetworkConnection();
     }
@@ -118,27 +148,24 @@ public class NetworkedClient : MonoBehaviour
 
         if (signafier == ServerToClientSignifier.LoginResponse)
         {
-            int status = int.Parse(data[1]);
+            int status = int.Parse(data[1]);    
 
             if (status == LoginResponse.Success)
             {
-                gameMgr.serverStatus.GetComponent<Text>().text = "Login Successful!";
-                gameMgr.serverStatus.GetComponent<Text>().color = Color.green;
-
+                SetServerStatus("Login Successful!", Color.green);
+                gameMgr.ChangeGameState(GameStates.WaitingForMatch);
+                //gameMgr.findSessionUI.gameObject.SetActive(true);
+                //gameMgr.loginUI.gameObject.SetActive(false);
+            
+            
             }
             else if (status == LoginResponse.WrongName)
             {
-
-                gameMgr.serverStatus.GetComponent<Text>().text = "That username does not exist!";
-                gameMgr.serverStatus.GetComponent<Text>().color = Color.red;
-
+                SetServerStatus("That username does not exist!", Color.red);
             }
             else if (status == LoginResponse.WrongPassword)
             {
-
-                gameMgr.serverStatus.GetComponent<Text>().text = "Wrong password!";
-                gameMgr.serverStatus.GetComponent<Text>().color = Color.red;
-
+                SetServerStatus("Wrong password!", Color.red);
             }
         }
         else if (signafier == ServerToClientSignifier.CreateResponse)
@@ -147,20 +174,48 @@ public class NetworkedClient : MonoBehaviour
 
             if (status == CreateResponse.Success)
             {
-                gameMgr.serverStatus.GetComponent<Text>().text = "Create account successful!";
-                gameMgr.serverStatus.GetComponent<Text>().color = Color.green;
-
+                SetServerStatus("Account creation success!", Color.green);
             }
             else if (status == CreateResponse.UsernameTaken)
             {
-
-                gameMgr.serverStatus.GetComponent<Text>().text = "That username is already taken!";
-                gameMgr.serverStatus.GetComponent<Text>().color = Color.red;
-
+                SetServerStatus("That username is already taken!", Color.red);
             }
             
         }
-        
+        else if (signafier == ServerToClientSignifier.GameSessionStarted)
+        {
+            gameMgr.ChangeGameState(GameStates.PlayingTicTacToe);
+            sessionstatus.text = "We are ready: " + data[1];
+            gameMgr.mychar = data[2][0];
+            //Debug.Log("WE ARE READY");
+        }
+        else if (signafier == ServerToClientSignifier.OpponentTicTacToePlay)
+        {
+            sessionstatus.text = data[1];
+            //Debug.Log("OPPONENT TIC TAC TOE PLAY");
+        }
+        else if (signafier == ServerToClientSignifier.UpdateBoardOnClientSide)
+        {
+            try
+            {
+
+                int index = 1;
+                for (int i = 0; i < 9; i++)
+                {
+                    board.slots[i].SetSlot(data[index]);
+                    index++;
+                }
+            }
+            catch(Exception e)
+            {
+                Debug.LogError("Error when updating board on client: " + e.Message);
+            }
+        }
+    }
+    public void SetServerStatus(string txt, Color col)
+    {
+        gameMgr.serverStatus.GetComponent<Text>().text = txt;
+        gameMgr.serverStatus.GetComponent<Text>().color = col;
     }
 
     public bool IsConnected()
