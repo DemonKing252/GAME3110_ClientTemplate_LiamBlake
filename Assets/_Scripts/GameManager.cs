@@ -4,21 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Networking;
 
-//GameObject[] gos = GameObject.FindObjectsOfType<GameObject>();
 
-//foreach(GameObject go in gos)
-//{
-//    if (go.name == "SubmitButton")
-//        inputFieldUserName = go;
-//    else if (go.name == "CreateToggle")
-//        inputFieldPassword = go;
-//    else if (go.name == "LoginToggle")
-//        toggleLogin = go;
-//    else if (go.name == "CreateToggle")
-//        toggleCreate = go;
-//    else if (go.name == "SubmitButton")
-//        buttonSubmit = go;
-//}
 public static class ClientToServerSignifier
 {
     public const int Login = 1;
@@ -27,6 +13,8 @@ public static class ClientToServerSignifier
     public const int AddToGameSessionQueue = 3;
     public const int TicTacToePlay = 4;
     public const int UpdateBoard = 5;
+
+    public const int ChatMessage = 6;
 
 }
 public static class ServerToClientSignifier
@@ -40,6 +28,19 @@ public static class ServerToClientSignifier
     public const int UpdateBoardOnClientSide = 105;
     public const int VerifyConnection = 106;
 
+    public const int MessageToClient = 107;
+
+}
+// manage sending our chat message to clients who we want to have authority 
+public static class MessageAuthority
+{
+    // These responses can be xxx digits, because they wont be checked anywhere else unless under the 
+    // condition of "ChatMessage" (signafier = 6)
+    // just to make sure though, im leaving a space of 50 between them.
+
+    public const int ToGameSession = 151;       // To clients in the game session
+    public const int ToObservers = 152;         // To observer clients
+    public const int ToOtherClients = 153;      // To game session clients
 }
 
 public static class LoginResponse
@@ -101,9 +102,18 @@ public class GameManager : MonoBehaviour
     public Text connectionVerificationStatus;
     public InputField ipaddress;
     public InputField portNumber;
+    public GameObject textPrefab;
+
+    public GameObject inputFieldMessage;
+    public GameObject sendBtn;
 
     public char mychar = 'X';
     public char playersturn = 'X';
+
+    public bool sendtotherclients = true;
+    public bool sendtoobservers = true;
+    public bool sendtogamesession = true;
+    public string sendmsg;
 
     // Start is called before the first frame update
     void Start()
@@ -114,6 +124,8 @@ public class GameManager : MonoBehaviour
 
         inputFieldUserName.GetComponent<InputField>().onEndEdit.AddListener(OnInputUser);
         inputFieldPassword.GetComponent<InputField>().onEndEdit.AddListener(OnInputPassword);
+        inputFieldMessage.GetComponent<InputField>().onEndEdit.AddListener(OnTextMessageEntered);
+        sendBtn.GetComponent<Button>().onClick.AddListener(OnSendMessageClicked);
 
 
         netclient = FindObjectOfType<NetworkedClient>();
@@ -146,6 +158,44 @@ public class GameManager : MonoBehaviour
             connectionVerificationStatus.color = Color.red;
 
         }
+    }
+    public void OnSendToGameSessionToggle(bool toggle)
+    {
+        sendtogamesession = toggle;
+    }
+    public void OnSendToObservers(bool toggle)
+    {
+        sendtoobservers = toggle;
+    }
+    public void OnSendToAllOtherClients(bool toggle)
+    {
+        sendtotherclients = toggle;
+    }
+    public void OnSendMessageClicked()
+    {
+        //TODO: options for sending to certain clients
+
+        netclient.SendMessageToHost
+            (
+                ClientToServerSignifier.ChatMessage + "," +
+                sendtogamesession.ToString() + "," +
+                sendtoobservers.ToString() + "," +
+                sendtotherclients.ToString() + "," + 
+                sendmsg
+            );
+
+        // spawntext()
+    }
+    public void OnTextMessageEntered(string msg)
+    {
+        // needed if the user decides to click the button
+        sendmsg = user + ": " + msg;
+    }
+    public void SpawnText(string msg)
+    {
+        inputFieldMessage.GetComponent<InputField>().text = "";
+        GameObject go = Instantiate(textPrefab, GameObject.FindGameObjectWithTag("TextContent").transform);
+        go.GetComponent<Text>().text = " " + msg;
     }
     public GameResult CheckGameResult()
     {

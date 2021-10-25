@@ -45,6 +45,7 @@ public class NetworkedClient : MonoBehaviour
         gameMgr = FindObjectOfType<GameManager>();
         onfindsessionbtn.onClick.AddListener(OnFindSession);
 
+
     }
     public void OnFindSession()
     {
@@ -157,7 +158,7 @@ public class NetworkedClient : MonoBehaviour
 
             if (status == LoginResponse.Success)
             {
-                SetServerStatus("Login Successful!", Color.green);
+                SetServerAuthenticationStatus("Login Successful!", Color.green);
                 gameMgr.ChangeGameState(GameStates.WaitingForMatch);
                 //gameMgr.findSessionUI.gameObject.SetActive(true);
                 //gameMgr.loginUI.gameObject.SetActive(false);
@@ -166,11 +167,11 @@ public class NetworkedClient : MonoBehaviour
             }
             else if (status == LoginResponse.WrongName)
             {
-                SetServerStatus("That username does not exist!", Color.red);
+                SetServerAuthenticationStatus("That username does not exist!", Color.red);
             }
             else if (status == LoginResponse.WrongPassword)
             {
-                SetServerStatus("Wrong password!", Color.red);
+                SetServerAuthenticationStatus("Wrong password!", Color.red);
             }
         }
         else if (signafier == ServerToClientSignifier.CreateResponse)
@@ -179,11 +180,11 @@ public class NetworkedClient : MonoBehaviour
 
             if (status == CreateResponse.Success)
             {
-                SetServerStatus("Account creation success!", Color.green);
+                SetServerAuthenticationStatus("Account creation success!", Color.green);
             }
             else if (status == CreateResponse.UsernameTaken)
             {
-                SetServerStatus("That username is already taken!", Color.red);
+                SetServerAuthenticationStatus("That username is already taken!", Color.red);
             }
             
         }
@@ -270,6 +271,10 @@ public class NetworkedClient : MonoBehaviour
             gameMgr.connectionSuccessful = true;
             gameMgr.ChangeGameState(GameStates.Login);
         }
+        else if (signafier == ServerToClientSignifier.MessageToClient)
+        {
+            gameMgr.SpawnText(data[1]);
+        }
     }
 
     // we have white as a default parameter because this a general message
@@ -280,7 +285,7 @@ public class NetworkedClient : MonoBehaviour
     }
 
     // this function is used for notifying the player about authentication
-    public void SetServerStatus(string txt, Color col)
+    public void SetServerAuthenticationStatus(string txt, Color col)
     {
         gameMgr.serverStatus.GetComponent<Text>().text = txt;
         gameMgr.serverStatus.GetComponent<Text>().color = col;
