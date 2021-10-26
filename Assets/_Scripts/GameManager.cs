@@ -16,6 +16,9 @@ public static class ClientToServerSignifier
 
     public const int ChatMessage = 6;
 
+    // Observers
+    public const int AddToObserverSessionQueue = 7;
+
 }
 public static class ServerToClientSignifier
 {
@@ -29,6 +32,9 @@ public static class ServerToClientSignifier
     public const int VerifyConnection = 106;
 
     public const int MessageToClient = 107;
+    public const int UpdateSessions = 108;
+
+    public const int ConfirmObserver = 109;
 
 }
 // manage sending our chat message to clients who we want to have authority 
@@ -68,6 +74,8 @@ public static class GameStates
     public const int PlayingTicTacToe = 4;
 
     public const int ConnectingToHost = 5;
+
+    public const int FindingObserver = 6;
     
 }
 
@@ -95,6 +103,7 @@ public class GameManager : MonoBehaviour
 
     public GameObject serverStatus;
 
+    public Canvas searchingObserver;
     public Canvas findSessionUI;
     public Canvas loginUI;
     public Canvas gameUI;
@@ -106,6 +115,7 @@ public class GameManager : MonoBehaviour
 
     public GameObject inputFieldMessage;
     public GameObject sendBtn;
+    public GameObject sessionPrefab;
 
     public char mychar = 'X';
     public char playersturn = 'X';
@@ -114,6 +124,30 @@ public class GameManager : MonoBehaviour
     public bool sendtoobservers = true;
     public bool sendtogamesession = true;
     public string sendmsg;
+    public int currentGameState = 1;
+
+    public GameObject observerParent;
+
+    //int _i = 0;
+    //List<string> stuff = new List<string>();
+
+    public void Refresh()
+    {
+        //GameObject[] gos = GameObject.FindGameObjectsWithTag("ObserverSession");
+        //foreach (GameObject go in gos)
+        //{
+        //    Destroy(go);
+        //}
+        //        //Destroy(go);
+
+        //foreach(string s in stuff)
+        //{
+        //    GameObject g = Instantiate(sessionPrefab, observerParent.transform);
+        //    g.gameObject.name = s;
+        //    g.gameObject.GetComponentInChildren<Text>().text = s;
+        //}
+    
+    }
 
     // Start is called before the first frame update
     void Start()
@@ -132,6 +166,13 @@ public class GameManager : MonoBehaviour
 
         ChangeGameState(GameStates.ConnectingToHost);
 
+
+        //for (int i = 0; i < 8; i++)
+        //{
+        //    _i++;
+        //    stuff.Add(string.Format("New test ({0})", i.ToString()));
+        //}
+        //Refresh();
     }
     private string user;
     private string password;
@@ -146,6 +187,7 @@ public class GameManager : MonoBehaviour
         // time out of 3 seconds
         Invoke("_VerifyConnection", 3f);
     }
+
     public void _VerifyConnection()
     {
         // Destroy network transport objects, and reinitialize and try for 
@@ -324,8 +366,10 @@ public class GameManager : MonoBehaviour
     }
     public void ChangeGameState(int newState)
     {
+        currentGameState = newState;
         if (newState == GameStates.Login)
         {
+            searchingObserver.gameObject.SetActive(false);
             findSessionUI.gameObject.SetActive(false);
             loginUI.gameObject.SetActive(true);
             gameUI.gameObject.SetActive(false);
@@ -333,6 +377,7 @@ public class GameManager : MonoBehaviour
         }
         else if (newState == GameStates.MainMenu)
         {
+            searchingObserver.gameObject.SetActive(false);
             findSessionUI.gameObject.SetActive(false);
             loginUI.gameObject.SetActive(true);
             gameUI.gameObject.SetActive(false);
@@ -341,6 +386,7 @@ public class GameManager : MonoBehaviour
         }
         else if (newState == GameStates.WaitingForMatch)
         {
+            searchingObserver.gameObject.SetActive(false);
             findSessionUI.gameObject.SetActive(true);
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
@@ -348,6 +394,7 @@ public class GameManager : MonoBehaviour
         }
         else if (newState == GameStates.PlayingTicTacToe)
         {
+            searchingObserver.gameObject.SetActive(false);
             findSessionUI.gameObject.SetActive(false);
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(true);
@@ -355,16 +402,31 @@ public class GameManager : MonoBehaviour
         }
         else if (newState == GameStates.ConnectingToHost)
         {
+            searchingObserver.gameObject.SetActive(false);
             findSessionUI.gameObject.SetActive(false);
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(true);
+        }
+        else if (newState == GameStates.FindingObserver)
+        {
+
+            searchingObserver.gameObject.SetActive(true);
+            findSessionUI.gameObject.SetActive(false);
+            loginUI.gameObject.SetActive(false);
+            gameUI.gameObject.SetActive(false);
+            connectToHostUI.gameObject.SetActive(false);
+            netclient.RefreshSessions();
         }
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+        if (Input.GetKeyDown(KeyCode.D))
+        {
+            //GameObject gos = GameObject.FindGameObjectsWithTag("ObserverSession")
+            Refresh();
+        }
     }
 }

@@ -17,10 +17,23 @@ public class BoardView
 
     }
 }
+[System.Serializable]
+public class Sessions
+{
+    public int index;
+    public Sessions(int i)
+    {
+        index = i;
+    }
+
+}
+
+
 
 public class NetworkedClient : MonoBehaviour
 {
-
+    // A list of game sessions to choose from
+    List<Sessions> sessionViews = new List<Sessions>();
 
     int connectionID;
     int maxConnections = 1000;
@@ -36,15 +49,22 @@ public class NetworkedClient : MonoBehaviour
     private GameManager gameMgr;
 
     public Button onfindsessionbtn;
+    public Button observebtn;
     public Text sessionstatus;
     public Text gameroomstatus;
     public BoardView board = new BoardView();
+    
+    public bool isObserver = false;
+
     // Start is called before the first frame update
     void Start()
     {
         gameMgr = FindObjectOfType<GameManager>();
-        onfindsessionbtn.onClick.AddListener(OnFindSession);
 
+        onfindsessionbtn.onClick.AddListener(OnFindSession);
+        observebtn.onClick.AddListener(OnLookForObserver);
+
+        //gameMgr.ChangeGameState(GameStates.FindingObserver);
 
     }
     public void OnFindSession()
@@ -53,18 +73,29 @@ public class NetworkedClient : MonoBehaviour
         SendMessageToHost(ClientToServerSignifier.AddToGameSessionQueue.ToString() + ",");
 
         gameroomstatus.gameObject.SetActive(true);
+
         onfindsessionbtn.gameObject.SetActive(false);
+        observebtn.gameObject.SetActive(false);
 
         gameMgr.ChangeGameState(GameStates.WaitingForMatch);
 
     }
+    public void OnLookForObserver()
+    {
+        gameMgr.ChangeGameState(GameStates.FindingObserver);
+    }
     // Update is called once per frame
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.S))
-            SendMessageToHost(ClientToServerSignifier.TicTacToePlay + ",");
+        //if (Input.GetKeyDown(KeyCode.S))
+        //{
+        //    GameObject go = Instantiate(gameMgr.sessionPrefab, gameMgr.observerParent.transform);
+        //}
+            //SendMessageToHost(ClientToServerSignifier.TicTacToePlay + ",");
 
         UpdateNetworkConnection();
+
+
     }
 
     private void UpdateNetworkConnection()
@@ -203,6 +234,7 @@ public class NetworkedClient : MonoBehaviour
         }
         else if (signafier == ServerToClientSignifier.OpponentTicTacToePlay)
         {
+            isObserver = false;
             //sessionstatus.text = data[1];
             //Debug.Log("OPPONENT TIC TAC TOE PLAY");
         }
@@ -223,46 +255,73 @@ public class NetworkedClient : MonoBehaviour
                 Debug.LogError("Error when updating board on client: " + e.Message);
             }
 
-
-            gameMgr.playersturn = data[1][0];   // parsing to char is just a matter of using string at index whatever
+            if (!isObserver)
+                gameMgr.playersturn = data[1][0];   // parsing to char is just a matter of using string at index whatever
 
             // check if there is a final outcome
             GameResult result = gameMgr.CheckGameResult();
 
-            switch(result)
+            if (!isObserver)
             {
-                case GameResult.PlayerX:
-                    Debug.Log("here 1");
-                    if (gameMgr.mychar == 'X')
-                        SetSessionStatus("You win!", Color.white);
-                    else
-                        SetSessionStatus("You lose!", Color.white);
-                    break;
+                switch (result)
+                {
+                    case GameResult.PlayerX:
+                        Debug.Log("here 1");
+                        if (gameMgr.mychar == 'X')
+                            SetSessionStatus("You win!", Color.white);
+                        else
+                            SetSessionStatus("You lose!", Color.white);
+                        break;
 
-                case GameResult.PlayerO:
-                    Debug.Log("here 2");
-                    if (gameMgr.mychar == 'O')
-                        SetSessionStatus("You win!", Color.white);
-                    else
-                        SetSessionStatus("You lose!", Color.white);
-                    break;
-                    
-                case GameResult.Tie:
-                    Debug.Log("here 3");
+                    case GameResult.PlayerO:
+                        Debug.Log("here 2");
+                        if (gameMgr.mychar == 'O')
+                            SetSessionStatus("You win!", Color.white);
+                        else
+                            SetSessionStatus("You lose!", Color.white);
+                        break;
 
-                    SetSessionStatus("Its a tie game!", Color.white);
-                    break;
+                    case GameResult.Tie:
+                        Debug.Log("here 3");
 
-                case GameResult.NothingDetermined:
+                        SetSessionStatus("Its a tie game!", Color.white);
+                        break;
 
-                    Debug.Log("here 4");
-                    if (gameMgr.mychar == gameMgr.playersturn)
-                        SetSessionStatus("Its your turn, pick a slot!", Color.white);
-                    else
-                        SetSessionStatus("Waiting on player to pick a slot...", Color.white);
+                    case GameResult.NothingDetermined:
 
-                    break;
+                        Debug.Log("here 4");
+                        if (gameMgr.mychar == gameMgr.playersturn)
+                            SetSessionStatus("Its your turn, pick a slot!", Color.white);
+                        else
+                            SetSessionStatus("Waiting on player to pick a slot...", Color.white);
+
+                        break;
+                }
             }
+            else
+            {
+                // Observers can see which player wins, but they can't win or lose themselves because 
+                // they dont play the game.
+                switch (result)
+                {
+                    case GameResult.PlayerX:                        
+                        SetSessionStatus("Player X wins!", Color.white);
+                        break;
+
+                    case GameResult.PlayerO:
+                        SetSessionStatus("Player O wins!", Color.white);
+                        break;
+
+                    case GameResult.Tie:
+                        SetSessionStatus("Its a tie game!", Color.white);
+                        break;
+
+                    case GameResult.NothingDetermined:
+                        SetSessionStatus("Observers are not authorized to play", Color.white);
+                        break;
+                }
+            }
+            
 
             
         }
@@ -275,8 +334,46 @@ public class NetworkedClient : MonoBehaviour
         {
             gameMgr.SpawnText(data[1]);
         }
-    }
+        else if (signafier == ServerToClientSignifier.UpdateSessions)
+        {
+            int numSessions = int.Parse(data[1]);
+            int index = 2;
 
+            sessionViews.Clear();
+            
+            for (int i = 0; i < numSessions; i++)            
+                sessionViews.Add(new Sessions(i));
+            
+            // This will be handled when we join observer session game state otherwise
+            // we cant spawn objects under the parent of an object if its disabled 
+            // aka the disabled observer menu in any other game state
+            if (gameMgr.currentGameState == GameStates.FindingObserver)
+            {
+                RefreshSessions();
+            }
+
+        }
+        else if (signafier == ServerToClientSignifier.ConfirmObserver)
+        {
+            isObserver = true;
+            gameMgr.ChangeGameState(GameStates.PlayingTicTacToe);
+            SetSessionStatus("Observers are not authorized to play", Color.white);
+        }
+    }
+    public void RefreshSessions()
+    {
+        GameObject[] sessions = GameObject.FindGameObjectsWithTag("ObserverSession");
+        
+        foreach (GameObject view in sessions)
+            Destroy(view);
+
+        foreach(Sessions s in sessionViews)
+        {
+            GameObject go = Instantiate(gameMgr.sessionPrefab, gameMgr.observerParent.transform);
+            go.GetComponent<SessionView>().index = s.index;
+            go.GetComponentInChildren<Text>().text = "Session #" + s.index.ToString();
+        }
+    }
     // we have white as a default parameter because this a general message
     public void SetSessionStatus(string txt, Color col)
     {
@@ -289,6 +386,7 @@ public class NetworkedClient : MonoBehaviour
     {
         gameMgr.serverStatus.GetComponent<Text>().text = txt;
         gameMgr.serverStatus.GetComponent<Text>().color = col;
+
     }
 
     public bool IsConnected()

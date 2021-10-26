@@ -15,7 +15,7 @@ public class TicTacToeSlot : MonoBehaviour
     // Start is called before the first frame update
     public void OnClicked()
     {
-        if (gameMgr.mychar == gameMgr.playersturn && characterinslot == ' ')
+        if (gameMgr.mychar == gameMgr.playersturn && characterinslot == ' ' && !netclient.isObserver)
         {
 
             characterinslot = gameMgr.mychar;
