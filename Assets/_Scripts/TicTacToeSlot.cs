@@ -7,7 +7,10 @@ using UnityEngine.UI;
 public class TicTacToeSlot : MonoBehaviour
 {
     private Button slotbtn;
-    private Text displayText;
+
+    [HideInInspector]
+    public Text displayText;
+
     private GameManager gameMgr = null;
     private NetworkedClient netclient;
     public char characterinslot = ' ';
@@ -25,6 +28,21 @@ public class TicTacToeSlot : MonoBehaviour
             
         }
     }
+    public void _Reset()
+    {
+
+        slotbtn = GetComponent<Button>();
+        displayText = GetComponentInChildren<Text>();
+        gameMgr = FindObjectOfType<GameManager>();
+        netclient = FindObjectOfType<NetworkedClient>();
+
+        slotbtn.onClick.AddListener(OnClicked);
+
+
+        characterinslot = ' ';
+        displayText.text = characterinslot.ToString();
+    }
+
     public void SetSlot(string value)
     {
         characterinslot = value[0];
@@ -34,12 +52,7 @@ public class TicTacToeSlot : MonoBehaviour
     
     void Start()
     {
-        slotbtn = GetComponent<Button>();
-        displayText = GetComponentInChildren<Text>();
-        gameMgr = FindObjectOfType<GameManager>();
-        netclient = FindObjectOfType<NetworkedClient>();
-
-        slotbtn.onClick.AddListener(OnClicked);
+        _Reset();
     }
 
 }

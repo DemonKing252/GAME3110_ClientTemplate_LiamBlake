@@ -6,16 +6,83 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
 
+
+public static class ClientToServerSignifier
+{
+    public const int Login = 1;
+    public const int CreateAccount = 2;
+
+    public const int AddToGameSessionQueue = 3;
+    public const int TicTacToePlay = 4;
+    public const int UpdateBoard = 5;
+
+    public const int ChatMessage = 6;
+
+    // Observers
+    public const int AddToObserverSessionQueue = 7;
+
+    public const int LeaveSession = 8;
+    public const int LeaveServer = 9;
+
+}
+public static class ServerToClientSignifier
+{
+    public const int LoginResponse = 101;
+    public const int CreateResponse = 102;
+
+    public const int GameSessionStarted = 103;
+
+    public const int OpponentTicTacToePlay = 104;
+    public const int UpdateBoardOnClientSide = 105;
+    public const int VerifyConnection = 106;
+
+    public const int MessageToClient = 107;
+    public const int UpdateSessions = 108;
+
+    public const int ConfirmObserver = 109;
+    public const int PlayerDisconnected = 110;
+
+}
+// manage sending our chat message to clients who we want to have authority 
+public static class MessageAuthority
+{
+    // These responses can be xxx digits, because they wont be checked anywhere else unless under the 
+    // condition of "ChatMessage" (signafier = 6)
+    // just to make sure though, im leaving a space of 50 between them.
+
+    public const int ToGameSession = 151;       // To clients in the game session
+    public const int ToObservers = 152;         // To observer clients
+    public const int ToOtherClients = 153;      // To game session clients
+}
+
+public static class LoginResponse
+{
+    public const int Success = 1001;
+
+    public const int WrongNameAndPassword = 1002;
+    public const int WrongName = 1003;
+    public const int WrongPassword = 1004;
+}
+public static class CreateResponse
+{
+    // 10,000
+    public const int Success = 10001;
+    public const int UsernameTaken = 10002;
+}
+
 [System.Serializable]
 public class BoardView
 {
     public List<TicTacToeSlot> slots;
 
-
-    public void Refresh()
+    public void _Reset()
     {
-
+        foreach(TicTacToeSlot slot in slots)
+        {
+            slot._Reset();
+        }
     }
+
 }
 [System.Serializable]
 public class Sessions
@@ -50,10 +117,18 @@ public class NetworkedClient : MonoBehaviour
 
     public Button onfindsessionbtn;
     public Button observebtn;
+    public Button disconnectbtn;
+    public Button leavebtn;
+
+    public Toggle sessionToggle;
+    public Toggle observerToggle;
+    public Toggle othersessionsToggle;
+
     public Text sessionstatus;
     public Text gameroomstatus;
     public BoardView board = new BoardView();
     
+    [HideInInspector]
     public bool isObserver = false;
 
     // Start is called before the first frame update
@@ -63,10 +138,52 @@ public class NetworkedClient : MonoBehaviour
 
         onfindsessionbtn.onClick.AddListener(OnFindSession);
         observebtn.onClick.AddListener(OnLookForObserver);
+        disconnectbtn.onClick.AddListener(OnUserDisconnected);
+        leavebtn.onClick.AddListener(OnLeaveSession);
 
-        //gameMgr.ChangeGameState(GameStates.FindingObserver);
+        sessionToggle.isOn = gameMgr.sendtogamesession;
+        observerToggle.isOn = gameMgr.sendtoobservers;
+        othersessionsToggle.isOn = gameMgr.sendtotherclients;
+
+
+        sessionToggle.onValueChanged.AddListener(OnSendToCurrentGameSession);
+        observerToggle.onValueChanged.AddListener(OnSendToObservers);
+        othersessionsToggle.onValueChanged.AddListener(OnSendToOtherGameSessions);
+
 
     }
+    public void OnSendToCurrentGameSession(bool toggle)
+    {
+        gameMgr.sendtogamesession = toggle;
+    }
+    public void OnSendToObservers(bool toggle)
+    {
+        gameMgr.sendtoobservers = toggle;
+    }
+    public void OnSendToOtherGameSessions(bool toggle)
+    {
+        gameMgr.sendtotherclients = toggle;
+    }
+    void OnApplicationQuit()
+    {
+        string msg = ClientToServerSignifier.LeaveServer.ToString() + "," + isObserver + ",";
+        SendMessageToHost(msg);
+    }
+
+
+    public void OnLeaveSession()
+    {
+        string msg = ClientToServerSignifier.LeaveSession.ToString() + "," + isObserver + ",";
+        SendMessageToHost(msg);
+
+
+
+        gameroomstatus.gameObject.SetActive(false);
+        onfindsessionbtn.gameObject.SetActive(true);
+        observebtn.gameObject.SetActive(true);
+        gameMgr.ChangeGameState(GameStates.WaitingForMatch);
+    }
+
     public void OnFindSession()
     {
         Debug.Log("Finding session . . .");
@@ -87,14 +204,7 @@ public class NetworkedClient : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        //if (Input.GetKeyDown(KeyCode.S))
-        //{
-        //    GameObject go = Instantiate(gameMgr.sessionPrefab, gameMgr.observerParent.transform);
-        //}
-            //SendMessageToHost(ClientToServerSignifier.TicTacToePlay + ",");
-
         UpdateNetworkConnection();
-
 
     }
 
@@ -191,8 +301,6 @@ public class NetworkedClient : MonoBehaviour
             {
                 SetServerAuthenticationStatus("Login Successful!", Color.green);
                 gameMgr.ChangeGameState(GameStates.WaitingForMatch);
-                //gameMgr.findSessionUI.gameObject.SetActive(true);
-                //gameMgr.loginUI.gameObject.SetActive(false);
             
             
             }
@@ -222,7 +330,6 @@ public class NetworkedClient : MonoBehaviour
         else if (signafier == ServerToClientSignifier.GameSessionStarted)
         {
             gameMgr.ChangeGameState(GameStates.PlayingTicTacToe);
-            //sessionstatus.text = "We are ready: " + data[1];
             gameMgr.mychar = data[2][0];
             gameMgr.playersturn = data[3][0];
 
@@ -230,13 +337,10 @@ public class NetworkedClient : MonoBehaviour
                 SetSessionStatus("Its your turn, pick a slot!", Color.white);
             else
                 SetSessionStatus("Waiting on player to pick a slot...", Color.white);
-            //Debug.Log("WE ARE READY");
         }
         else if (signafier == ServerToClientSignifier.OpponentTicTacToePlay)
         {
             isObserver = false;
-            //sessionstatus.text = data[1];
-            //Debug.Log("OPPONENT TIC TAC TOE PLAY");
         }
         else if (signafier == ServerToClientSignifier.UpdateBoardOnClientSide)
         {
@@ -337,7 +441,6 @@ public class NetworkedClient : MonoBehaviour
         else if (signafier == ServerToClientSignifier.UpdateSessions)
         {
             int numSessions = int.Parse(data[1]);
-            int index = 2;
 
             sessionViews.Clear();
             
@@ -359,9 +462,31 @@ public class NetworkedClient : MonoBehaviour
             gameMgr.ChangeGameState(GameStates.PlayingTicTacToe);
             SetSessionStatus("Observers are not authorized to play", Color.white);
         }
+        else if (signafier == ServerToClientSignifier.PlayerDisconnected)
+        {
+            Debug.Log("Were right here");
+            isObserver = false;
+            gameMgr.ChangeGameState(GameStates.DisconnectionMenu);
+        }
+    }
+    public void OnUserDisconnected()
+    {
+        isObserver = false;
+
+        gameroomstatus.gameObject.SetActive(false);
+        onfindsessionbtn.gameObject.SetActive(true);
+        observebtn.gameObject.SetActive(true);
+
+        //netclient.board.Reset();
+
+        gameMgr.ChangeGameState(GameStates.WaitingForMatch);
+
     }
     public void RefreshSessions()
     {
+        // We cant spawn items on a gameobject if its inactive (were not in that state)
+        // so we need some decision making on when to add it
+
         GameObject[] sessions = GameObject.FindGameObjectsWithTag("ObserverSession");
         
         foreach (GameObject view in sessions)
