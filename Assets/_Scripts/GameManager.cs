@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Networking;
+using UnityEngine.Assertions;
+
+// TODO:
+// 1. replay system
+// 2. prevent clients from joining session with same username
+// 3. back button on session view (observer and replay)
 
 public static class GameStates
 {
@@ -19,6 +25,8 @@ public static class GameStates
     public const int FindingObserver = 6;
 
     public const int DisconnectionMenu = 7;
+
+    public const int ReplayMenu = 8;
     
 }
 
@@ -30,10 +38,43 @@ public enum GameResult
     NothingDetermined
 
 }
+[System.Serializable]
+public class Record
+{
+    public char[] slots = new char[9]
+    {
+        ' ',
+        ' ',
+        ' ',
+        ' ',
+        ' ',
+        ' ',
+        ' ',
+        ' ',
+        ' ',
+    };
+    public Record()
+    {
+
+    }
+    public string GetParsedData()
+    {
+        string temp = "";
+        foreach(char s in slots)
+        {
+            temp += s.ToString() + "|";
+        }
+
+        return temp;
+    }
+    // Client view
+}
 
 
 public class GameManager : MonoBehaviour
 {
+    public int index = 0;
+    public float recordRate = 0.5f;
     public GameObject inputFieldUserName;
     public GameObject inputFieldPassword;
 
@@ -52,7 +93,9 @@ public class GameManager : MonoBehaviour
     public Canvas gameUI;
     public Canvas connectToHostUI;
     public Canvas disconnectUI;
+    public Canvas replayUI;
 
+    public Text numRecordingsText;
     public Text connectionVerificationStatus;
     public InputField ipaddress;
     public InputField portNumber;
@@ -78,11 +121,21 @@ public class GameManager : MonoBehaviour
     private List<GameObject> textMessages = new List<GameObject>();
 
     public GameObject observerParent;
+    public GameObject recordingParent;
+    public List<Record> recordViews = new List<Record>();
 
+    [HideInInspector]
+    public bool isRecording = false;
+
+    private int MaxElementsPerRecord;
+    private const int recordSize = 52;
 
     // Start is called before the first frame update
     void Start()
     {
+        // Maximum number of elements we can specify in one packet
+        MaxElementsPerRecord = Mathf.FloorToInt((float)1024 / (float)recordSize);
+
         createAccountBtn.GetComponent<Button>().onClick.AddListener(OnCreateAccount);
         loginAccountBtn.GetComponent<Button>().onClick.AddListener(OnLogin);
         connectBtn.GetComponent<Button>().onClick.AddListener(OnTryConnection);
@@ -300,6 +353,7 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(true);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
+            replayUI.gameObject.SetActive(false);
         }
         else if (newState == GameStates.MainMenu)
         {
@@ -309,6 +363,7 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(true);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
+            replayUI.gameObject.SetActive(false);
 
         }
         else if (newState == GameStates.WaitingForMatch)
@@ -320,15 +375,18 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
+            replayUI.gameObject.SetActive(false);
         }
         else if (newState == GameStates.PlayingTicTacToe)
         {
+
             disconnectUI.gameObject.SetActive(false);
             searchingObserver.gameObject.SetActive(false);
             findSessionUI.gameObject.SetActive(false);
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(true);
             connectToHostUI.gameObject.SetActive(false);
+            replayUI.gameObject.SetActive(false);
 
             netclient.board._Reset();
             ClearTextMessages();
@@ -341,6 +399,7 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(true);
+            replayUI.gameObject.SetActive(false);
         }
         else if (newState == GameStates.FindingObserver)
         {
@@ -351,6 +410,7 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
+            replayUI.gameObject.SetActive(false);
             netclient.RefreshSessions();
         }
         else if (newState == GameStates.DisconnectionMenu)
@@ -361,15 +421,126 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
+            replayUI.gameObject.SetActive(false);
         }
+        else if (newState == GameStates.ReplayMenu)
+        {
+            disconnectUI.gameObject.SetActive(false);
+            searchingObserver.gameObject.SetActive(false);
+            findSessionUI.gameObject.SetActive(false);
+            loginUI.gameObject.SetActive(false);
+            gameUI.gameObject.SetActive(false);
+            connectToHostUI.gameObject.SetActive(false);
+            replayUI.gameObject.SetActive(true);
+
+        }
+    }
+    int temp;
+
+
+    public void StopRecording()
+    {
+        isRecording = false;
+        CancelInvoke("OnRecordScreenState");
+    }
+
+    public void UploadRecording() 
+    { 
+        // send all records to the server
+        int SubDivisions = MaxElementsPerRecord;
+        int SubDivisionsPerList = (recordViews.Count / SubDivisions);
+
+
+        // Add to the list of records:
+        List<Record> tempRecords = new List<Record>();
+
+        // In all of our records (seperated by "subdivision count")
+        for (int i = 0; i < SubDivisionsPerList + 1; i++)
+        {
+            int indexStart = i * SubDivisions;
+            int indexEnd = (i + 1) * SubDivisions;
+
+            tempRecords.Clear();
+
+            // For every record in this sub divided list
+            for (int j = indexStart; j < indexEnd; j++)
+            {
+                // Were sub dividing by a floored number so we will always have a remainder
+                // of elements after the last sub division, just do a simple check
+                if (j < recordViews.Count)
+                {
+                    Debug.Log("Heart beat number: " + i + " " + " Index is: " + j.ToString());
+                    tempRecords.Add(recordViews[j]);
+                    temp = j;
+                }
+            }
+            // parse the data into comma seperated values
+            string msg = ClientToServerSignifier.SendRecord + "," + tempRecords.Count.ToString() + ",";
+
+            // Get parsed data returns the board slots as '|' seperated values.
+            // We can have seperated values inside other seperated values.
+            // a comma will seperate the records, while a '|' will seperate the board slots themselves
+            foreach (Record r in tempRecords)                
+                msg += r.GetParsedData() + ",";
+
+
+            // and now we can send it to the server
+            netclient.SendMessageToHost(msg);
+
+            //Debug.Log("Message: " + msg.ToString());
+        }
+        // tell the server that were done sending records
+        // so the server can add it to the list of saved recordings
+        netclient.SendMessageToHost(ClientToServerSignifier.RecordSendingDone.ToString() + ",");
+
+        // Clear our records, the server has them and well get a list of recordings for replaying.
+        recordViews.Clear();
+
+    }
+    public void StartRecording()
+    {
+        InvokeRepeating("OnRecordScreenState", 0f, recordRate);
+
+    }
+
+    // Record the state of our game.
+    public void OnRecordScreenState()
+    {
+        Record r = new Record();
+        
+        // Throw an exception, these container sizes should be the same
+        Assert.IsTrue(r.slots.Length == netclient.board.slots.Count, "Error: Record board size and board view size needs to be the same!");
+
+        for (int i = 0; i < r.slots.Length; i++)
+        {
+            r.slots[i] = netclient.board.slots[i].characterinslot;
+        }
+
+        recordViews.Add(r);
+
+        numRecordingsText.text = recordViews.Count.ToString() + " " + temp.ToString();
+    }
+    public static string GetFormattedTime()
+    {
+
+        System.DateTime dateTime = System.DateTime.Now;
+        string txt =
+            dateTime.Month.ToString("00") +
+            "-" + dateTime.Day.ToString("00") +
+            "-" + dateTime.Year.ToString("00") +
+            " " + dateTime.Hour.ToString("00") +
+            ":" + dateTime.Minute.ToString("00") +
+            ":" + dateTime.Second.ToString("00");
+
+        return txt;
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.M))
-        {
-            ClearTextMessages();
-        }
+        //if (Input.GetKeyDown(KeyCode.R))
+        //{
+        //    netclient.SendMessageToHost(ClientToServerSignifier.SendRecord.ToString() + "," + recordViews[index].GetParsedData());
+        //}
     }
 }

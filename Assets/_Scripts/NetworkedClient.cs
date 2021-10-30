@@ -5,6 +5,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
+using UnityEngine.Assertions;
 
 
 public static class ClientToServerSignifier
@@ -24,6 +25,9 @@ public static class ClientToServerSignifier
     public const int LeaveSession = 8;
     public const int LeaveServer = 9;
 
+    public const int SendRecord = 10;
+    public const int RecordSendingDone = 11;
+
 }
 public static class ServerToClientSignifier
 {
@@ -41,6 +45,10 @@ public static class ServerToClientSignifier
 
     public const int ConfirmObserver = 109;
     public const int PlayerDisconnected = 110;
+    
+    public const int SendRecording = 111;
+    public const int QueueEndOfRecord = 112;
+    public const int QueueStartOfRecordings = 113;
 
 }
 // manage sending our chat message to clients who we want to have authority 
@@ -95,12 +103,21 @@ public class Sessions
 
 }
 
+[System.Serializable]
+public class Recording
+{
+    public List<Record> records = new List<Record>();
+}
 
 
 public class NetworkedClient : MonoBehaviour
 {
     // A list of game sessions to choose from
     List<Sessions> sessionViews = new List<Sessions>();
+
+    public List<Record> recordViews = new List<Record>();
+
+    public List<Recording> recordings = new List<Recording>();
 
     int connectionID;
     int maxConnections = 1000;
@@ -119,6 +136,7 @@ public class NetworkedClient : MonoBehaviour
     public Button observebtn;
     public Button disconnectbtn;
     public Button leavebtn;
+    public Button replayListViewbtn;
 
     public Toggle sessionToggle;
     public Toggle observerToggle;
@@ -127,7 +145,10 @@ public class NetworkedClient : MonoBehaviour
     public Text sessionstatus;
     public Text gameroomstatus;
     public BoardView board = new BoardView();
-    
+
+    [HideInInspector]
+    public int playerNumber = -1; // can only be 1 or 2, once the game session has started
+
     [HideInInspector]
     public bool isObserver = false;
 
@@ -140,6 +161,7 @@ public class NetworkedClient : MonoBehaviour
         observebtn.onClick.AddListener(OnLookForObserver);
         disconnectbtn.onClick.AddListener(OnUserDisconnected);
         leavebtn.onClick.AddListener(OnLeaveSession);
+        replayListViewbtn.onClick.AddListener(OnEnterReplaySessionsView);
 
         sessionToggle.isOn = gameMgr.sendtogamesession;
         observerToggle.isOn = gameMgr.sendtoobservers;
@@ -149,7 +171,6 @@ public class NetworkedClient : MonoBehaviour
         sessionToggle.onValueChanged.AddListener(OnSendToCurrentGameSession);
         observerToggle.onValueChanged.AddListener(OnSendToObservers);
         othersessionsToggle.onValueChanged.AddListener(OnSendToOtherGameSessions);
-
 
     }
     public void OnSendToCurrentGameSession(bool toggle)
@@ -164,12 +185,13 @@ public class NetworkedClient : MonoBehaviour
     {
         gameMgr.sendtotherclients = toggle;
     }
+
     void OnApplicationQuit()
     {
         string msg = ClientToServerSignifier.LeaveServer.ToString() + "," + isObserver + ",";
         SendMessageToHost(msg);
     }
-
+    
 
     public void OnLeaveSession()
     {
@@ -182,6 +204,22 @@ public class NetworkedClient : MonoBehaviour
         onfindsessionbtn.gameObject.SetActive(true);
         observebtn.gameObject.SetActive(true);
         gameMgr.ChangeGameState(GameStates.WaitingForMatch);
+    }
+    public void QueueStopRecord()
+    {
+        gameMgr.StopRecording();
+
+        // Since the server needs time to process each recording,
+        // we need to give player 1 some time to upload their recording
+        // to the server before player 2.
+        if (playerNumber == 1)
+            gameMgr.UploadRecording();
+        else if (playerNumber == 2)
+            Invoke("DelayThenStop", 2f);
+    }
+    public void DelayThenStop()
+    {
+        gameMgr.UploadRecording();
     }
 
     public void OnFindSession()
@@ -200,6 +238,11 @@ public class NetworkedClient : MonoBehaviour
     public void OnLookForObserver()
     {
         gameMgr.ChangeGameState(GameStates.FindingObserver);
+    }
+    public void OnEnterReplaySessionsView()
+    {
+        gameMgr.isRecording = true;
+        gameMgr.ChangeGameState(GameStates.ReplayMenu);
     }
     // Update is called once per frame
     void Update()
@@ -284,6 +327,8 @@ public class NetworkedClient : MonoBehaviour
         byte[] buffer = Encoding.Unicode.GetBytes(msg);
         NetworkTransport.Send(hostID, connectionID, reliableChannelID, buffer, msg.Length * sizeof(char), out error);
     }
+    private List<Record> tempRecords = new List<Record>();
+
 
     private void ProcessRecievedMsg(string msg, int id)
     {
@@ -329,9 +374,14 @@ public class NetworkedClient : MonoBehaviour
         }
         else if (signafier == ServerToClientSignifier.GameSessionStarted)
         {
+            // Start recording the session
+            // eventually have a checkbox if this should be recorded or not.
+            gameMgr.StartRecording();
+
             gameMgr.ChangeGameState(GameStates.PlayingTicTacToe);
             gameMgr.mychar = data[2][0];
             gameMgr.playersturn = data[3][0];
+            playerNumber = int.Parse(data[4]);
 
             if (gameMgr.mychar == gameMgr.playersturn)
                 SetSessionStatus("Its your turn, pick a slot!", Color.white);
@@ -370,6 +420,9 @@ public class NetworkedClient : MonoBehaviour
                 switch (result)
                 {
                     case GameResult.PlayerX:
+
+                        QueueStopRecord();
+
                         Debug.Log("here 1");
                         if (gameMgr.mychar == 'X')
                             SetSessionStatus("You win!", Color.white);
@@ -378,6 +431,8 @@ public class NetworkedClient : MonoBehaviour
                         break;
 
                     case GameResult.PlayerO:
+                        QueueStopRecord();
+
                         Debug.Log("here 2");
                         if (gameMgr.mychar == 'O')
                             SetSessionStatus("You win!", Color.white);
@@ -388,6 +443,7 @@ public class NetworkedClient : MonoBehaviour
                     case GameResult.Tie:
                         Debug.Log("here 3");
 
+                        QueueStopRecord();
                         SetSessionStatus("Its a tie game!", Color.white);
                         break;
 
@@ -468,6 +524,53 @@ public class NetworkedClient : MonoBehaviour
             isObserver = false;
             gameMgr.ChangeGameState(GameStates.DisconnectionMenu);
         }
+        else if (signafier == ServerToClientSignifier.SendRecording)
+        {
+
+            Debug.Log("Adding record to queue . . .");
+            int index = 2;
+            int numSubDivisions = int.Parse(data[1]);
+            for (int i = 0; i < numSubDivisions; i++)
+            {
+                string[] boardData = data[index].Split('|');
+                Record r = new Record();
+
+                // using index 0 will allow you to get the character in the string (index 0)
+                r.slots[0] = boardData[0][0];  // characters
+                r.slots[1] = boardData[1][0];  // characters
+                r.slots[2] = boardData[2][0];  // characters
+                r.slots[3] = boardData[3][0];  // characters
+                r.slots[4] = boardData[4][0];  // characters
+                r.slots[5] = boardData[5][0];  // characters
+                r.slots[6] = boardData[6][0];  // characters
+                r.slots[7] = boardData[7][0];  // characters
+                r.slots[8] = boardData[8][0];  // characters
+
+                index++;
+
+                tempRecords.Add(r);
+            }
+        }
+        else if (signafier == ServerToClientSignifier.QueueEndOfRecord)
+        {
+            Debug.Log("End of records queued. . .");
+
+            Recording r = new Recording();
+            Record[] _tempRecords = new Record[tempRecords.Count];
+            tempRecords.CopyTo(_tempRecords, 0);
+
+            foreach (Record temp in _tempRecords)
+                r.records.Add(temp);
+
+            recordings.Add(r);
+
+            tempRecords.Clear();
+        }
+        else if (signafier == ServerToClientSignifier.QueueStartOfRecordings)
+        {
+            recordings.Clear();
+            tempRecords.Clear();
+        }
     }
     public void OnUserDisconnected()
     {
@@ -518,6 +621,6 @@ public class NetworkedClient : MonoBehaviour
     {
         return isConnected;
     }
-
+    
 
 }
