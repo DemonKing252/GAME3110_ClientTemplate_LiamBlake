@@ -49,6 +49,7 @@ public static class ServerToClientSignifier
     public const int SendRecording = 111;
     public const int QueueEndOfRecord = 112;
     public const int QueueStartOfRecordings = 113;
+    public const int QueueEndOfRecordings = 114;
 
 }
 // manage sending our chat message to clients who we want to have authority 
@@ -106,6 +107,8 @@ public class Sessions
 [System.Serializable]
 public class Recording
 {
+    public string username;   // username that this was recorded from
+    public string timeRecorded;
     public List<Record> records = new List<Record>();
 }
 
@@ -198,29 +201,12 @@ public class NetworkedClient : MonoBehaviour
         string msg = ClientToServerSignifier.LeaveSession.ToString() + "," + isObserver + ",";
         SendMessageToHost(msg);
 
-
-
         gameroomstatus.gameObject.SetActive(false);
         onfindsessionbtn.gameObject.SetActive(true);
         observebtn.gameObject.SetActive(true);
         gameMgr.ChangeGameState(GameStates.WaitingForMatch);
     }
-    public void QueueStopRecord()
-    {
-        gameMgr.StopRecording();
-
-        // Since the server needs time to process each recording,
-        // we need to give player 1 some time to upload their recording
-        // to the server before player 2.
-        if (playerNumber == 1)
-            gameMgr.UploadRecording();
-        else if (playerNumber == 2)
-            Invoke("DelayThenStop", 2f);
-    }
-    public void DelayThenStop()
-    {
-        gameMgr.UploadRecording();
-    }
+    
 
     public void OnFindSession()
     {
@@ -376,7 +362,8 @@ public class NetworkedClient : MonoBehaviour
         {
             // Start recording the session
             // eventually have a checkbox if this should be recorded or not.
-            gameMgr.StartRecording();
+            if (!isObserver)
+                gameMgr.StartRecording();
 
             gameMgr.ChangeGameState(GameStates.PlayingTicTacToe);
             gameMgr.mychar = data[2][0];
@@ -421,7 +408,8 @@ public class NetworkedClient : MonoBehaviour
                 {
                     case GameResult.PlayerX:
 
-                        QueueStopRecord();
+
+                        gameMgr.StopRecording();
 
                         Debug.Log("here 1");
                         if (gameMgr.mychar == 'X')
@@ -431,7 +419,8 @@ public class NetworkedClient : MonoBehaviour
                         break;
 
                     case GameResult.PlayerO:
-                        QueueStopRecord();
+
+                        gameMgr.StopRecording();
 
                         Debug.Log("here 2");
                         if (gameMgr.mychar == 'O')
@@ -443,7 +432,8 @@ public class NetworkedClient : MonoBehaviour
                     case GameResult.Tie:
                         Debug.Log("here 3");
 
-                        QueueStopRecord();
+
+                        gameMgr.StopRecording();
                         SetSessionStatus("Its a tie game!", Color.white);
                         break;
 
@@ -556,6 +546,10 @@ public class NetworkedClient : MonoBehaviour
             Debug.Log("End of records queued. . .");
 
             Recording r = new Recording();
+
+            r.timeRecorded = data[1];
+            r.username = data[2];
+
             Record[] _tempRecords = new Record[tempRecords.Count];
             tempRecords.CopyTo(_tempRecords, 0);
 
@@ -571,7 +565,13 @@ public class NetworkedClient : MonoBehaviour
             recordings.Clear();
             tempRecords.Clear();
         }
+        else if (signafier == ServerToClientSignifier.QueueEndOfRecordings)
+        {
+            if (gameMgr.currentGameState == GameStates.ReplayMenu)
+                gameMgr.RefreshRecordings();
+        }
     }
+    
     public void OnUserDisconnected()
     {
         isObserver = false;

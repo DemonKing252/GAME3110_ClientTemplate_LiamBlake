@@ -95,7 +95,7 @@ public class GameManager : MonoBehaviour
     public Canvas disconnectUI;
     public Canvas replayUI;
 
-    public Text numRecordingsText;
+    public Text debugText;
     public Text connectionVerificationStatus;
     public InputField ipaddress;
     public InputField portNumber;
@@ -103,7 +103,9 @@ public class GameManager : MonoBehaviour
 
     public GameObject inputFieldMessage;
     public GameObject sendBtn;
+
     public GameObject sessionPrefab;
+    public GameObject recordingPrefab;
 
     public char mychar = 'X';
     public char playersturn = 'X';
@@ -119,6 +121,8 @@ public class GameManager : MonoBehaviour
     public int currentGameState = 1;
 
     private List<GameObject> textMessages = new List<GameObject>();
+
+    private List<GameObject> recordingOptions = new List<GameObject>();
 
     public GameObject observerParent;
     public GameObject recordingParent;
@@ -318,6 +322,7 @@ public class GameManager : MonoBehaviour
         netclient.SendMessageToHost(msg);
 
     }
+    
     public void OnLogin()
     {
         string msg = ClientToServerSignifier.Login.ToString() + "," + user + "," + password;
@@ -432,16 +437,35 @@ public class GameManager : MonoBehaviour
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
             replayUI.gameObject.SetActive(true);
-
+            RefreshRecordings();
         }
     }
-    int temp;
-
-
     public void StopRecording()
     {
+        // Observers cant record there sessions
+        if (netclient.isObserver)
+            return;
+
         isRecording = false;
         CancelInvoke("OnRecordScreenState");
+
+        // Since the server needs time to process each recording,
+        // we need to give player 1 some time to upload their recording
+        // to the server before player 2.
+        if (netclient.playerNumber == 1)
+        {
+            UploadRecording();
+
+        }
+        else if (netclient.playerNumber == 2)
+        {
+            Invoke("DelayThenStop", 2f);
+        }
+    }
+    
+    public void DelayThenStop()
+    {
+        UploadRecording();
     }
 
     public void UploadRecording() 
@@ -469,9 +493,7 @@ public class GameManager : MonoBehaviour
                 // of elements after the last sub division, just do a simple check
                 if (j < recordViews.Count)
                 {
-                    Debug.Log("Heart beat number: " + i + " " + " Index is: " + j.ToString());
                     tempRecords.Add(recordViews[j]);
-                    temp = j;
                 }
             }
             // parse the data into comma seperated values
@@ -491,7 +513,7 @@ public class GameManager : MonoBehaviour
         }
         // tell the server that were done sending records
         // so the server can add it to the list of saved recordings
-        netclient.SendMessageToHost(ClientToServerSignifier.RecordSendingDone.ToString() + ",");
+        netclient.SendMessageToHost(ClientToServerSignifier.RecordSendingDone.ToString() + "," + GetFormattedTime() + "," + user + ",");
 
         // Clear our records, the server has them and well get a list of recordings for replaying.
         recordViews.Clear();
@@ -518,7 +540,6 @@ public class GameManager : MonoBehaviour
 
         recordViews.Add(r);
 
-        numRecordingsText.text = recordViews.Count.ToString() + " " + temp.ToString();
     }
     public static string GetFormattedTime()
     {
@@ -534,7 +555,21 @@ public class GameManager : MonoBehaviour
 
         return txt;
     }
+    public void RefreshRecordings()
+    {
+        GameObject[] _records = GameObject.FindGameObjectsWithTag("RecordingButton");
+        
+        foreach (GameObject go in _records)
+            Destroy(go);
 
+        for (int i = 0; i < netclient.recordings.Count; i++)
+        {
+            GameObject go = Instantiate(recordingPrefab, recordingParent.transform);
+            go.GetComponent<RecordView>().index = i;
+            go.GetComponent<RecordView>().recordingText.text = "Record #" + i.ToString() + " by: " + netclient.recordings[i].username + " on " + netclient.recordings[i].timeRecorded;
+
+        }
+    }
     // Update is called once per frame
     void Update()
     {

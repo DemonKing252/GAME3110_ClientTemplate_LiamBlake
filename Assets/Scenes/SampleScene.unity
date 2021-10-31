@@ -712,7 +712,7 @@ MonoBehaviour:
   connectToHostUI: {fileID: 331297223}
   disconnectUI: {fileID: 1775949558}
   replayUI: {fileID: 802404303}
-  numRecordingsText: {fileID: 317881802}
+  debugText: {fileID: 0}
   connectionVerificationStatus: {fileID: 1150938259}
   ipaddress: {fileID: 757931612}
   portNumber: {fileID: 874556757}
@@ -720,6 +720,7 @@ MonoBehaviour:
   inputFieldMessage: {fileID: 1862839906}
   sendBtn: {fileID: 1641228662}
   sessionPrefab: {fileID: 7467470205384175723, guid: 8791eff67f7bc9944b5a7c91f81a9120, type: 3}
+  recordingPrefab: {fileID: 8665423085987438332, guid: a91732e3a5e006b4facdf2fd61920c18, type: 3}
   mychar: 88
   playersturn: 88
   sendtogamesession: 1
@@ -2229,7 +2230,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: New Text
+  m_Text: 
 --- !u!222 &317881803
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -6536,6 +6537,7 @@ MonoBehaviour:
     - {fileID: 33537026}
     - {fileID: 361176972}
     - {fileID: 928669398}
+  playerNumber: -1
   isObserver: 0
 --- !u!4 &1092927127
 Transform:

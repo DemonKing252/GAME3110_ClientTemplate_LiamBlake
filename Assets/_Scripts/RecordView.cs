@@ -7,7 +7,7 @@ using System;
 public class RecordView : MonoBehaviour
 {
     public int index = -1;
-    private Text recordingText;
+    public Text recordingText;
 
     // Start is called before the first frame update
     void Start()
