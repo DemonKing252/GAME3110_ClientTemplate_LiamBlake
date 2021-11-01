@@ -147,7 +147,9 @@ public class NetworkedClient : MonoBehaviour
 
     public Text sessionstatus;
     public Text gameroomstatus;
-    public BoardView board = new BoardView();
+
+    public BoardView boardGameView = new BoardView();
+    public BoardView boardRecordView = new BoardView();
 
     [HideInInspector]
     public int playerNumber = -1; // can only be 1 or 2, once the game session has started
@@ -204,6 +206,8 @@ public class NetworkedClient : MonoBehaviour
         gameroomstatus.gameObject.SetActive(false);
         onfindsessionbtn.gameObject.SetActive(true);
         observebtn.gameObject.SetActive(true);
+        replayListViewbtn.gameObject.SetActive(true);
+
         gameMgr.ChangeGameState(GameStates.WaitingForMatch);
     }
     
@@ -217,6 +221,7 @@ public class NetworkedClient : MonoBehaviour
 
         onfindsessionbtn.gameObject.SetActive(false);
         observebtn.gameObject.SetActive(false);
+        replayListViewbtn.gameObject.SetActive(false);
 
         gameMgr.ChangeGameState(GameStates.WaitingForMatch);
 
@@ -387,7 +392,7 @@ public class NetworkedClient : MonoBehaviour
                 int index = 2;
                 for (int i = 0; i < 9; i++)
                 {
-                    board.slots[i].SetSlot(data[index]);
+                    boardGameView.slots[i].SetSlot(data[index]);
                     index++;
                 }
             }
@@ -579,6 +584,7 @@ public class NetworkedClient : MonoBehaviour
         gameroomstatus.gameObject.SetActive(false);
         onfindsessionbtn.gameObject.SetActive(true);
         observebtn.gameObject.SetActive(true);
+        replayListViewbtn.gameObject.SetActive(true);
 
         //netclient.board.Reset();
 

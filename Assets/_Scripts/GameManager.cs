@@ -27,9 +27,10 @@ public static class GameStates
     public const int DisconnectionMenu = 7;
 
     public const int ReplayMenu = 8;
+
+    public const int ReplayMode = 9;
     
 }
-
 public enum GameResult
 {
     PlayerX,
@@ -73,6 +74,8 @@ public class Record
 
 public class GameManager : MonoBehaviour
 {
+    // Only if were in replay mode
+    public int activeRecordingIndex = -1;
     public int index = 0;
     public float recordRate = 0.5f;
     public GameObject inputFieldUserName;
@@ -93,7 +96,8 @@ public class GameManager : MonoBehaviour
     public Canvas gameUI;
     public Canvas connectToHostUI;
     public Canvas disconnectUI;
-    public Canvas replayUI;
+    public Canvas replayMenuUI;
+    public Canvas replayModeUI;
 
     public Text debugText;
     public Text connectionVerificationStatus;
@@ -113,6 +117,22 @@ public class GameManager : MonoBehaviour
     public bool sendtogamesession = true;
     public bool sendtoobservers = true;
     public bool sendtotherclients = true;
+
+    public Sprite playBtn;
+    public Sprite pauseBtn;
+
+    public Recording activeRecording = null;
+    public int currentRecordIndex = 0;
+    public float recordCounter = 0f;
+    public float replayScale = 1f;
+    // 60 fps consistent
+
+    public GameObject destinationRecordingImg;
+
+    public Text replayTime;
+    public Text replayHeader;
+
+    private bool recordingPaused = false;
 
     [HideInInspector]
     public string sendmsg;
@@ -223,7 +243,7 @@ public class GameManager : MonoBehaviour
     }
     public GameResult CheckGameResult()
     {
-        BoardView b = netclient.board;
+        BoardView b = netclient.boardGameView;
         int column = 0;
         for(int i = 0; i < 9; i+=3)
         {
@@ -306,7 +326,7 @@ public class GameManager : MonoBehaviour
     public void OnUpdateBoard()
     {
         string message = ClientToServerSignifier.UpdateBoard + ",";
-        foreach(TicTacToeSlot slot in netclient.board.slots)
+        foreach(TicTacToeSlot slot in netclient.boardGameView.slots)
         {
             message += slot.characterinslot.ToString();
             message += ",";
@@ -358,7 +378,8 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(true);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
-            replayUI.gameObject.SetActive(false);
+            replayMenuUI.gameObject.SetActive(false);
+            replayModeUI.gameObject.SetActive(false);
         }
         else if (newState == GameStates.MainMenu)
         {
@@ -368,7 +389,8 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(true);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
-            replayUI.gameObject.SetActive(false);
+            replayMenuUI.gameObject.SetActive(false);
+            replayModeUI.gameObject.SetActive(false);
 
         }
         else if (newState == GameStates.WaitingForMatch)
@@ -380,7 +402,8 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
-            replayUI.gameObject.SetActive(false);
+            replayMenuUI.gameObject.SetActive(false);
+            replayModeUI.gameObject.SetActive(false);
         }
         else if (newState == GameStates.PlayingTicTacToe)
         {
@@ -391,9 +414,10 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(true);
             connectToHostUI.gameObject.SetActive(false);
-            replayUI.gameObject.SetActive(false);
+            replayMenuUI.gameObject.SetActive(false);
+            replayModeUI.gameObject.SetActive(false);
 
-            netclient.board._Reset();
+            netclient.boardGameView._Reset();
             ClearTextMessages();
         }
         else if (newState == GameStates.ConnectingToHost)
@@ -404,7 +428,8 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(true);
-            replayUI.gameObject.SetActive(false);
+            replayMenuUI.gameObject.SetActive(false);
+            replayModeUI.gameObject.SetActive(false);
         }
         else if (newState == GameStates.FindingObserver)
         {
@@ -415,7 +440,8 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
-            replayUI.gameObject.SetActive(false);
+            replayMenuUI.gameObject.SetActive(false);
+            replayModeUI.gameObject.SetActive(false);
             netclient.RefreshSessions();
         }
         else if (newState == GameStates.DisconnectionMenu)
@@ -426,7 +452,8 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
-            replayUI.gameObject.SetActive(false);
+            replayMenuUI.gameObject.SetActive(false);
+            replayModeUI.gameObject.SetActive(false);
         }
         else if (newState == GameStates.ReplayMenu)
         {
@@ -436,8 +463,29 @@ public class GameManager : MonoBehaviour
             loginUI.gameObject.SetActive(false);
             gameUI.gameObject.SetActive(false);
             connectToHostUI.gameObject.SetActive(false);
-            replayUI.gameObject.SetActive(true);
+            replayMenuUI.gameObject.SetActive(true);
+            replayModeUI.gameObject.SetActive(false);
             RefreshRecordings();
+        }
+        else if (newState == GameStates.ReplayMode)
+        {
+            disconnectUI.gameObject.SetActive(false);
+            searchingObserver.gameObject.SetActive(false);
+            findSessionUI.gameObject.SetActive(false);
+            loginUI.gameObject.SetActive(false);
+            gameUI.gameObject.SetActive(false);
+            connectToHostUI.gameObject.SetActive(false);
+            replayMenuUI.gameObject.SetActive(false);
+            replayModeUI.gameObject.SetActive(true);
+
+            // Get our needed variables reset 
+            recordCounter = 0f;
+            currentRecordIndex = 0;
+            replayScale = 1f;
+            recordingPaused = false;
+
+            replayHeader.text = "Replaying - Recording #" + activeRecordingIndex.ToString() + " by " + netclient.recordings[activeRecordingIndex].username + " on " + netclient.recordings[activeRecordingIndex].timeRecorded;
+
         }
     }
     public void StopRecording()
@@ -467,7 +515,10 @@ public class GameManager : MonoBehaviour
     {
         UploadRecording();
     }
-
+    public void OnLeaveRecording()
+    {
+        ChangeGameState(GameStates.ReplayMenu);
+    }
     public void UploadRecording() 
     { 
         // send all records to the server
@@ -531,11 +582,11 @@ public class GameManager : MonoBehaviour
         Record r = new Record();
         
         // Throw an exception, these container sizes should be the same
-        Assert.IsTrue(r.slots.Length == netclient.board.slots.Count, "Error: Record board size and board view size needs to be the same!");
+        Assert.IsTrue(r.slots.Length == netclient.boardGameView.slots.Count, "Error: Record board size and board view size needs to be the same!");
 
         for (int i = 0; i < r.slots.Length; i++)
         {
-            r.slots[i] = netclient.board.slots[i].characterinslot;
+            r.slots[i] = netclient.boardGameView.slots[i].characterinslot;
         }
 
         recordViews.Add(r);
@@ -578,4 +629,93 @@ public class GameManager : MonoBehaviour
         //    netclient.SendMessageToHost(ClientToServerSignifier.SendRecord.ToString() + "," + recordViews[index].GetParsedData());
         //}
     }
+    
+    void FixedUpdate()
+    {
+        if (currentGameState == GameStates.ReplayMode)
+            ReplayUpdate();
+    }
+    // Pause/Fast fwd/Reverse
+    public void OnPlayBackEvent(int evt)
+    {
+        // Reverse 
+        if (evt == 0)
+        {
+            replayScale = -1f;
+            recordingPaused = false;
+            destinationRecordingImg.GetComponent<Image>().sprite = pauseBtn;
+            destinationRecordingImg.transform.localScale = new Vector3(1f, 1f, 1f);
+        }
+        // Pause/Play
+        else if (evt == 1)
+        {
+            recordingPaused = !recordingPaused;
+
+            if (recordingPaused)
+            {
+                replayScale = 0f;
+                destinationRecordingImg.GetComponent<Image>().sprite = playBtn;
+                destinationRecordingImg.transform.localScale = new Vector3(2f, 1f, 1f);
+            }
+            else
+            {
+                destinationRecordingImg.GetComponent<Image>().sprite = pauseBtn;
+                destinationRecordingImg.transform.localScale = new Vector3(1f, 1f, 1f);
+                replayScale = 1f;
+
+            }
+        }
+        // Fast forward
+        else if (evt == 2)
+        {
+            recordingPaused = false;
+            destinationRecordingImg.GetComponent<Image>().sprite = pauseBtn;
+            destinationRecordingImg.transform.localScale = new Vector3(1f, 1f, 1f);
+            replayScale = 1.5f;
+        }
+    }
+
+
+    public void ReplayUpdate()
+    {
+        try 
+        {
+            // We don't have to worry about delta time here, because fixed update will sync our play back anyway!
+            // Unity is very generous
+            
+
+            activeRecording = netclient.recordings[activeRecordingIndex];
+
+            recordCounter += recordRate * replayScale;
+
+            recordCounter = Mathf.Clamp(recordCounter, 0, (float)(activeRecording.records.Count - 1));
+            currentRecordIndex = (int)recordCounter;
+
+            float secondsNow = (float)currentRecordIndex / (recordRate * 60f);
+
+            int minNow = (int)secondsNow / 60;
+            int secNow = (int)secondsNow % 60;
+
+            //Debug.Log(secondsNow.ToString());
+
+            float totalSeconds = (float)activeRecording.records.Count / (recordRate * 60f);
+            int minOf = (int)totalSeconds / 60;
+            int secOf = (int)totalSeconds % 60;
+
+            replayTime.text = minNow.ToString() + ":" + secNow.ToString("00") + " / " + minOf.ToString() + ":" + secOf.ToString("00");
+
+            // Update board
+            for (int i = 0; i < 9; i++)
+            {
+                netclient.boardRecordView.slots[i].SetSlot(activeRecording.records[currentRecordIndex].slots[i]);
+            }
+
+            
+        }
+        catch(System.Exception e) 
+        {
+            Debug.LogError("EXCEPTION when replaying: " + e.Message);
+        }
+    }
+
 }

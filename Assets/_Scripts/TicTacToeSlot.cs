@@ -43,13 +43,19 @@ public class TicTacToeSlot : MonoBehaviour
         displayText.text = characterinslot.ToString();
     }
 
+    // Overload
     public void SetSlot(string value)
     {
         characterinslot = value[0];
         displayText.text = characterinslot.ToString();
     }
-    
-    
+    // Overload
+    public void SetSlot(char value)
+    {
+        characterinslot = value;
+        displayText.text = characterinslot.ToString();
+    }
+
     void Start()
     {
         _Reset();
