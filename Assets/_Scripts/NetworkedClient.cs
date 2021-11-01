@@ -71,6 +71,7 @@ public static class LoginResponse
     public const int WrongNameAndPassword = 1002;
     public const int WrongName = 1003;
     public const int WrongPassword = 1004;
+    public const int AccountAlreadyUsedByAnotherPlayer = 1005;
 }
 public static class CreateResponse
 {
@@ -140,6 +141,7 @@ public class NetworkedClient : MonoBehaviour
     public Button disconnectbtn;
     public Button leavebtn;
     public Button replayListViewbtn;
+    public Button quitbtn;
 
     public Toggle sessionToggle;
     public Toggle observerToggle;
@@ -207,6 +209,7 @@ public class NetworkedClient : MonoBehaviour
         onfindsessionbtn.gameObject.SetActive(true);
         observebtn.gameObject.SetActive(true);
         replayListViewbtn.gameObject.SetActive(true);
+        quitbtn.gameObject.SetActive(true);
 
         gameMgr.ChangeGameState(GameStates.WaitingForMatch);
     }
@@ -222,6 +225,7 @@ public class NetworkedClient : MonoBehaviour
         onfindsessionbtn.gameObject.SetActive(false);
         observebtn.gameObject.SetActive(false);
         replayListViewbtn.gameObject.SetActive(false);
+        quitbtn.gameObject.SetActive(false);
 
         gameMgr.ChangeGameState(GameStates.WaitingForMatch);
 
@@ -249,8 +253,8 @@ public class NetworkedClient : MonoBehaviour
             int recHostID;
             int recConnectionID;
             int recChannelID;
-            byte[] recBuffer = new byte[1024];
-            int bufferSize = 1024;
+            byte[] recBuffer = new byte[8192];
+            int bufferSize = 8192;
             int dataSize;
             NetworkEventType recNetworkEvent = NetworkTransport.Receive(out recHostID, out recConnectionID, out recChannelID, recBuffer, bufferSize, out dataSize, out error);
 
@@ -348,6 +352,10 @@ public class NetworkedClient : MonoBehaviour
             {
                 SetServerAuthenticationStatus("Wrong password!", Color.red);
             }
+            else if (status == LoginResponse.AccountAlreadyUsedByAnotherPlayer)
+            {
+                SetServerAuthenticationStatus("That username is already logged on to this server!", Color.yellow);
+            }
         }
         else if (signafier == ServerToClientSignifier.CreateResponse)
         {
@@ -376,9 +384,9 @@ public class NetworkedClient : MonoBehaviour
             playerNumber = int.Parse(data[4]);
 
             if (gameMgr.mychar == gameMgr.playersturn)
-                SetSessionStatus("Its your turn, pick a slot!", Color.white);
+                SetSessionStatus("Its your turn pick a slot", Color.white);
             else
-                SetSessionStatus("Waiting on player to pick a slot...", Color.white);
+                SetSessionStatus("Waiting on player to pick a slot", Color.white);
         }
         else if (signafier == ServerToClientSignifier.OpponentTicTacToePlay)
         {
@@ -414,41 +422,41 @@ public class NetworkedClient : MonoBehaviour
                     case GameResult.PlayerX:
 
 
-                        gameMgr.StopRecording();
 
                         Debug.Log("here 1");
                         if (gameMgr.mychar == 'X')
                             SetSessionStatus("You win!", Color.white);
                         else
                             SetSessionStatus("You lose!", Color.white);
+                        gameMgr.StopRecording();
                         break;
 
                     case GameResult.PlayerO:
 
-                        gameMgr.StopRecording();
 
                         Debug.Log("here 2");
                         if (gameMgr.mychar == 'O')
-                            SetSessionStatus("You win!", Color.white);
+                            SetSessionStatus("You win", Color.white);
                         else
-                            SetSessionStatus("You lose!", Color.white);
+                            SetSessionStatus("You lose", Color.white);
+                        gameMgr.StopRecording();
                         break;
 
                     case GameResult.Tie:
                         Debug.Log("here 3");
 
 
+                        SetSessionStatus("Its a tie game", Color.white);
                         gameMgr.StopRecording();
-                        SetSessionStatus("Its a tie game!", Color.white);
                         break;
 
                     case GameResult.NothingDetermined:
 
                         Debug.Log("here 4");
                         if (gameMgr.mychar == gameMgr.playersturn)
-                            SetSessionStatus("Its your turn, pick a slot!", Color.white);
+                            SetSessionStatus("Its your turn pick a slot", Color.white);
                         else
-                            SetSessionStatus("Waiting on player to pick a slot...", Color.white);
+                            SetSessionStatus("Waiting on player to pick a slot", Color.white);
 
                         break;
                 }
@@ -460,15 +468,15 @@ public class NetworkedClient : MonoBehaviour
                 switch (result)
                 {
                     case GameResult.PlayerX:                        
-                        SetSessionStatus("Player X wins!", Color.white);
+                        SetSessionStatus("Player X wins", Color.white);
                         break;
 
                     case GameResult.PlayerO:
-                        SetSessionStatus("Player O wins!", Color.white);
+                        SetSessionStatus("Player O wins", Color.white);
                         break;
 
                     case GameResult.Tie:
-                        SetSessionStatus("Its a tie game!", Color.white);
+                        SetSessionStatus("Its a tie game", Color.white);
                         break;
 
                     case GameResult.NothingDetermined:
@@ -527,7 +535,9 @@ public class NetworkedClient : MonoBehaviour
             int numSubDivisions = int.Parse(data[1]);
             for (int i = 0; i < numSubDivisions; i++)
             {
-                string[] boardData = data[index].Split('|');
+                string[] gameData = data[index].Split('+');
+
+                string[] boardData = gameData[0].Split('|');
                 Record r = new Record();
 
                 // using index 0 will allow you to get the character in the string (index 0)
@@ -540,6 +550,15 @@ public class NetworkedClient : MonoBehaviour
                 r.slots[6] = boardData[6][0];  // characters
                 r.slots[7] = boardData[7][0];  // characters
                 r.slots[8] = boardData[8][0];  // characters
+
+                // Server response status (the text on screen above the board)
+                r.serverResponse = boardData[9];
+
+                string[] textData = gameData[1].Split('|');
+                foreach (string s in textData)
+                {
+                    r.messages.Add(s);
+                }
 
                 index++;
 
@@ -585,6 +604,8 @@ public class NetworkedClient : MonoBehaviour
         onfindsessionbtn.gameObject.SetActive(true);
         observebtn.gameObject.SetActive(true);
         replayListViewbtn.gameObject.SetActive(true);
+
+        quitbtn.gameObject.SetActive(true);
 
         //netclient.board.Reset();
 

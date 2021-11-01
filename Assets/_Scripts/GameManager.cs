@@ -54,9 +54,13 @@ public class Record
         ' ',
         ' ',
     };
+
+    public string serverResponse;
+    public List<string> messages;
+    
     public Record()
     {
-
+        messages = new List<string>();
     }
     public string GetParsedData()
     {
@@ -64,6 +68,11 @@ public class Record
         foreach(char s in slots)
         {
             temp += s.ToString() + "|";
+        }
+        temp += serverResponse + "|+";
+        foreach(string m in messages)
+        {
+            temp += m + "|";
         }
 
         return temp;
@@ -129,8 +138,11 @@ public class GameManager : MonoBehaviour
 
     public GameObject destinationRecordingImg;
 
+    #region ReplayAttributes
     public Text replayTime;
     public Text replayHeader;
+    public Text serverSesionStatus;
+    #endregion
 
     private bool recordingPaused = false;
 
@@ -152,7 +164,13 @@ public class GameManager : MonoBehaviour
     public bool isRecording = false;
 
     private int MaxElementsPerRecord;
-    private const int recordSize = 52;
+    private const int recordSize = 224;
+    private string user;
+    private string password;
+
+    [HideInInspector]
+    public bool connectionSuccessful = false;
+    public GameObject recordingTextsParent;
 
     // Start is called before the first frame update
     void Start()
@@ -175,11 +193,6 @@ public class GameManager : MonoBehaviour
         ChangeGameState(GameStates.ConnectingToHost);
 
     }
-    private string user;
-    private string password;
-
-    [HideInInspector]
-    public bool connectionSuccessful = false;
 
     public void OnTryConnection()
     {
@@ -222,6 +235,13 @@ public class GameManager : MonoBehaviour
     }
     public void OnTextMessageEntered(string msg)
     {
+        // Remove comma seperated, '|' and '+' seperated values because they will interfere
+        // when comparing signifier
+
+        msg.Replace(",", " ");
+        msg.Replace("+", " ");
+        msg.Replace("|", " ");
+
         // needed if the user decides to click the button
         sendmsg = user + ": " + msg;
     }
@@ -395,7 +415,6 @@ public class GameManager : MonoBehaviour
         }
         else if (newState == GameStates.WaitingForMatch)
         {
-
             disconnectUI.gameObject.SetActive(false);
             searchingObserver.gameObject.SetActive(false);
             findSessionUI.gameObject.SetActive(true);
@@ -495,6 +514,8 @@ public class GameManager : MonoBehaviour
             return;
 
         isRecording = false;
+        // Record the last frame in case it was missed
+        OnRecordScreenState();
         CancelInvoke("OnRecordScreenState");
 
         // Since the server needs time to process each recording,
@@ -588,6 +609,12 @@ public class GameManager : MonoBehaviour
         {
             r.slots[i] = netclient.boardGameView.slots[i].characterinslot;
         }
+        r.serverResponse = netclient.sessionstatus.text;
+
+        foreach(GameObject go in textMessages)
+        {
+            r.messages.Add(go.GetComponent<Text>().text);
+        }
 
         recordViews.Add(r);
 
@@ -624,10 +651,10 @@ public class GameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        //if (Input.GetKeyDown(KeyCode.R))
-        //{
-        //    netclient.SendMessageToHost(ClientToServerSignifier.SendRecord.ToString() + "," + recordViews[index].GetParsedData());
-        //}
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            netclient.SendMessageToHost(144.ToString() + "," + netclient.recordings[0].records[index].GetParsedData());
+        }
     }
     
     void FixedUpdate()
@@ -692,30 +719,59 @@ public class GameManager : MonoBehaviour
             currentRecordIndex = (int)recordCounter;
 
             float secondsNow = (float)currentRecordIndex / (recordRate * 60f);
-
-            int minNow = (int)secondsNow / 60;
-            int secNow = (int)secondsNow % 60;
-
-            //Debug.Log(secondsNow.ToString());
-
             float totalSeconds = (float)activeRecording.records.Count / (recordRate * 60f);
-            int minOf = (int)totalSeconds / 60;
-            int secOf = (int)totalSeconds % 60;
 
-            replayTime.text = minNow.ToString() + ":" + secNow.ToString("00") + " / " + minOf.ToString() + ":" + secOf.ToString("00");
+
+            replayTime.text = GetFormattedTime(secondsNow) + " / " + GetFormattedTime(totalSeconds);
 
             // Update board
+            Record currentRecord = activeRecording.records[currentRecordIndex];
+
+            // Board status
             for (int i = 0; i < 9; i++)
+                netclient.boardRecordView.slots[i].SetSlot(currentRecord.slots[i]);
+
+            GameObject[] gos = GameObject.FindGameObjectsWithTag("RecordedTextContent");
+            foreach (GameObject g in gos)
+                Destroy(g);
+
+            foreach(string text in currentRecord.messages)
             {
-                netclient.boardRecordView.slots[i].SetSlot(activeRecording.records[currentRecordIndex].slots[i]);
+                // We don't need to waste time spawning text messages that clients
+                // send that are empty. Theres no point
+                if (text == "")
+                    continue;
+
+                GameObject go = Instantiate(textPrefab, recordingTextsParent.transform);
+                go.GetComponent<Text>().text = text;
+                go.tag = "RecordedTextContent";
             }
 
-            
+
+            // Board session header (the text above the tic tac toe board)
+            serverSesionStatus.text = currentRecord.serverResponse;
+
         }
         catch(System.Exception e) 
         {
             Debug.LogError("EXCEPTION when replaying: " + e.Message);
         }
     }
+    public string GetFormattedTime(float secs)
+    {
+        int min = (int)secs / 60;
+        int sec = (int)secs % 60;
 
+        string temp = min.ToString() + ":" + sec.ToString("00");
+        return temp;
+    }
+    public void OnQuitApp()
+    {
+        // If were in unity editor, closing the app will be done through editor application
+    #if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+    #else
+        Application.Quit();
+    #endif
+    }
 }
