@@ -165,8 +165,8 @@ public class GameManager : MonoBehaviour
 
     private int MaxElementsPerRecord;
     private const int recordSize = 224;
-    private string user;
-    private string password;
+    public string user;
+    public string password;
 
     [HideInInspector]
     public bool connectionSuccessful = false;
@@ -593,6 +593,7 @@ public class GameManager : MonoBehaviour
     }
     public void StartRecording()
     {
+        recordViews.Clear();
         InvokeRepeating("OnRecordScreenState", 0f, recordRate);
 
     }

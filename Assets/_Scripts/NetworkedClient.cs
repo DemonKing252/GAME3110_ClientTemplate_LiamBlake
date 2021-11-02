@@ -50,6 +50,7 @@ public static class ServerToClientSignifier
     public const int QueueEndOfRecord = 112;
     public const int QueueStartOfRecordings = 113;
     public const int QueueEndOfRecordings = 114;
+    public const int KickPlayer = 115;
 
 }
 // manage sending our chat message to clients who we want to have authority 
@@ -72,6 +73,7 @@ public static class LoginResponse
     public const int WrongName = 1003;
     public const int WrongPassword = 1004;
     public const int AccountAlreadyUsedByAnotherPlayer = 1005;
+    public const int AccountBanned = 1006;
 }
 public static class CreateResponse
 {
@@ -356,6 +358,10 @@ public class NetworkedClient : MonoBehaviour
             {
                 SetServerAuthenticationStatus("That username is already logged on to this server!", Color.yellow);
             }
+            else if (status == LoginResponse.AccountBanned)
+            {
+                SetServerAuthenticationStatus("That account has been banned from this server!", new Color(1.0f, 0.65f, 0.0f));
+            }
         }
         else if (signafier == ServerToClientSignifier.CreateResponse)
         {
@@ -382,6 +388,7 @@ public class NetworkedClient : MonoBehaviour
             gameMgr.mychar = data[2][0];
             gameMgr.playersturn = data[3][0];
             playerNumber = int.Parse(data[4]);
+
 
             if (gameMgr.mychar == gameMgr.playersturn)
                 SetSessionStatus("Its your turn pick a slot", Color.white);
@@ -593,6 +600,32 @@ public class NetworkedClient : MonoBehaviour
         {
             if (gameMgr.currentGameState == GameStates.ReplayMenu)
                 gameMgr.RefreshRecordings();
+        }
+        else if (signafier == ServerToClientSignifier.KickPlayer)
+        {
+            if (gameMgr.currentGameState == GameStates.PlayingTicTacToe)
+            {
+                string _msg = ClientToServerSignifier.LeaveSession.ToString() + "," + isObserver + ",";
+                SendMessageToHost(_msg);
+
+
+                gameroomstatus.gameObject.SetActive(false);
+                onfindsessionbtn.gameObject.SetActive(true);
+                observebtn.gameObject.SetActive(true);
+                replayListViewbtn.gameObject.SetActive(true);
+                quitbtn.gameObject.SetActive(true);
+            }
+
+            gameMgr.ChangeGameState(GameStates.Login);
+            gameMgr.user = string.Empty;
+            gameMgr.password = string.Empty;
+
+            gameMgr.inputFieldUserName.GetComponent<InputField>().text = string.Empty;
+            gameMgr.inputFieldPassword.GetComponent<InputField>().text = string.Empty;
+
+
+            SetServerAuthenticationStatus("You have been kicked from the server!", new Color(1.0f, 0.65f, 0.0f));
+
         }
     }
     
