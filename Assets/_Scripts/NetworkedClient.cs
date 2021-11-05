@@ -51,6 +51,7 @@ public static class ServerToClientSignifier
     public const int QueueStartOfRecordings = 113;
     public const int QueueEndOfRecordings = 114;
     public const int KickPlayer = 115;
+    public const int ConnectionLost = 116;
 
 }
 // manage sending our chat message to clients who we want to have authority 
@@ -151,7 +152,9 @@ public class NetworkedClient : MonoBehaviour
 
     public Text sessionstatus;
     public Text gameroomstatus;
-
+    public Text hostConnectionStatus;
+    public Text myPlayerChar;   
+     
     public BoardView boardGameView = new BoardView();
     public BoardView boardRecordView = new BoardView();
 
@@ -343,8 +346,13 @@ public class NetworkedClient : MonoBehaviour
             {
                 SetServerAuthenticationStatus("Login Successful!", Color.green);
                 gameMgr.ChangeGameState(GameStates.WaitingForMatch);
-            
-            
+
+                gameroomstatus.gameObject.SetActive(false);
+                onfindsessionbtn.gameObject.SetActive(true);
+                observebtn.gameObject.SetActive(true);
+                replayListViewbtn.gameObject.SetActive(true);
+                quitbtn.gameObject.SetActive(true);
+
             }
             else if (status == LoginResponse.WrongName)
             {
@@ -381,14 +389,15 @@ public class NetworkedClient : MonoBehaviour
         {
             // Start recording the session
             // eventually have a checkbox if this should be recorded or not.
-            if (!isObserver)
-                gameMgr.StartRecording();
+            
 
             gameMgr.ChangeGameState(GameStates.PlayingTicTacToe);
             gameMgr.mychar = data[2][0];
             gameMgr.playersturn = data[3][0];
             playerNumber = int.Parse(data[4]);
 
+            if (!isObserver)
+                gameMgr.StartRecording();
 
             if (gameMgr.mychar == gameMgr.playersturn)
                 SetSessionStatus("Its your turn pick a slot", Color.white);
@@ -413,7 +422,7 @@ public class NetworkedClient : MonoBehaviour
             }
             catch (Exception e)
             {
-                Debug.LogError("Error when updating board on client: " + e.Message);
+                Debug.Log("Player board update issue: " + e.Message);
             }
 
             if (!isObserver)
@@ -427,10 +436,9 @@ public class NetworkedClient : MonoBehaviour
                 switch (result)
                 {
                     case GameResult.PlayerX:
+                        gameMgr.gameOn = false;
 
 
-
-                        Debug.Log("here 1");
                         if (gameMgr.mychar == 'X')
                             SetSessionStatus("You win!", Color.white);
                         else
@@ -439,9 +447,8 @@ public class NetworkedClient : MonoBehaviour
                         break;
 
                     case GameResult.PlayerO:
+                        gameMgr.gameOn = false;
 
-
-                        Debug.Log("here 2");
                         if (gameMgr.mychar == 'O')
                             SetSessionStatus("You win", Color.white);
                         else
@@ -450,8 +457,7 @@ public class NetworkedClient : MonoBehaviour
                         break;
 
                     case GameResult.Tie:
-                        Debug.Log("here 3");
-
+                        gameMgr.gameOn = false;
 
                         SetSessionStatus("Its a tie game", Color.white);
                         gameMgr.StopRecording();
@@ -459,7 +465,6 @@ public class NetworkedClient : MonoBehaviour
 
                     case GameResult.NothingDetermined:
 
-                        Debug.Log("here 4");
                         if (gameMgr.mychar == gameMgr.playersturn)
                             SetSessionStatus("Its your turn pick a slot", Color.white);
                         else
@@ -627,6 +632,25 @@ public class NetworkedClient : MonoBehaviour
             SetServerAuthenticationStatus("You have been kicked from the server!", new Color(1.0f, 0.65f, 0.0f));
 
         }
+        else if (signafier == ServerToClientSignifier.ConnectionLost)
+        {
+            // Reset authentication
+            gameMgr.user = string.Empty;
+            gameMgr.password = string.Empty;
+            socketPort = 5491;
+            ip = "127.0.0.1";
+
+            gameMgr.ipaddress.text = ip;
+            gameMgr.portNumber.text = socketPort.ToString();
+
+            Disconnect();
+
+            gameMgr.ChangeGameState(GameStates.ConnectingToHost);
+            hostConnectionStatus.gameObject.SetActive(true);
+            hostConnectionStatus.text = "Notice: Lost connection to host!";
+            gameMgr.connectionVerificationStatus.text = "Enter server host:";
+
+        }
     }
     
     public void OnUserDisconnected()
@@ -665,7 +689,11 @@ public class NetworkedClient : MonoBehaviour
     // we have white as a default parameter because this a general message
     public void SetSessionStatus(string txt, Color col)
     {
-        sessionstatus.text = txt;
+        if (isObserver)
+            sessionstatus.text = txt;
+        else
+            sessionstatus.text = "[Player " + gameMgr.mychar.ToString() + "]: " + txt;
+
         sessionstatus.color = col;
     }
 

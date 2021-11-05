@@ -172,6 +172,7 @@ public class GameManager : MonoBehaviour
     [HideInInspector]
     public bool connectionSuccessful = false;
     public GameObject recordingTextsParent;
+    public bool gameOn = true;
 
     // Start is called before the first frame update
     void Start()
@@ -427,7 +428,7 @@ public class GameManager : MonoBehaviour
         }
         else if (newState == GameStates.PlayingTicTacToe)
         {
-
+            gameOn = true;
             disconnectUI.gameObject.SetActive(false);
             searchingObserver.gameObject.SetActive(false);
             findSessionUI.gameObject.SetActive(false);
