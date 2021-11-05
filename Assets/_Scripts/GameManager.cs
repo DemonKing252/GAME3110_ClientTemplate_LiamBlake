@@ -55,12 +55,13 @@ public class Record
         ' ',
     };
 
-    public string serverResponse;
+    public string serverResponse;    
     public List<string> messages;
     
     public Record()
     {
         messages = new List<string>();
+        Assert.IsTrue(slots.Length == 9, "Error in GameManager.cs: Slot length has to be 9!");
     }
     public string GetParsedData()
     {
@@ -238,9 +239,9 @@ public class GameManager : MonoBehaviour
         // Remove comma seperated, '|' and '+' seperated values because they will interfere
         // when comparing signifier
 
-        msg.Replace(",", " ");
-        msg.Replace("+", " ");
-        msg.Replace("|", " ");
+        msg = msg.Replace(',', ' ');
+        msg = msg.Replace('+', ' ');
+        msg = msg.Replace('|', ' ');
 
         // needed if the user decides to click the button
         sendmsg = user + ": " + msg;
@@ -497,6 +498,11 @@ public class GameManager : MonoBehaviour
             replayMenuUI.gameObject.SetActive(false);
             replayModeUI.gameObject.SetActive(true);
 
+            // Clear out any garbage text messages that were in here before.
+            GameObject[] gos = GameObject.FindGameObjectsWithTag("RecordedTextContent");
+            foreach (GameObject g in gos)
+                Destroy(g);
+
             // Get our needed variables reset 
             recordCounter = 0f;
             currentRecordIndex = 0;
@@ -733,19 +739,25 @@ public class GameManager : MonoBehaviour
                 netclient.boardRecordView.slots[i].SetSlot(currentRecord.slots[i]);
 
             GameObject[] gos = GameObject.FindGameObjectsWithTag("RecordedTextContent");
-            foreach (GameObject g in gos)
-                Destroy(g);
 
-            foreach(string text in currentRecord.messages)
+            // Catch up to the ammount of messages we have in this record
+            // There is new messages that is on this EXACT record, we need to iterate and spawn
+            // the ones that were missing.
+            if (currentRecord.messages.Count != gos.Length)
             {
-                // We don't need to waste time spawning text messages that clients
-                // send that are empty. Theres no point
-                if (text == "")
-                    continue;
 
-                GameObject go = Instantiate(textPrefab, recordingTextsParent.transform);
-                go.GetComponent<Text>().text = text;
-                go.tag = "RecordedTextContent";
+                // start on the index after current record
+                int startIndex = gos.Length; 
+                
+                for (int i = startIndex; i < currentRecord.messages.Count; i++)
+                {
+                    if (currentRecord.messages[i] == string.Empty)
+                        continue;
+
+                    GameObject go = Instantiate(textPrefab, recordingTextsParent.transform);
+                    go.GetComponent<Text>().text = currentRecord.messages[i];
+                    go.tag = "RecordedTextContent";
+                }
             }
 
 
@@ -772,6 +784,7 @@ public class GameManager : MonoBehaviour
     #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
     #else
+        // Else were in build mode
         Application.Quit();
     #endif
     }
