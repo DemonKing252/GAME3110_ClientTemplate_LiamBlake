@@ -496,9 +496,10 @@ public class NetworkedClient : MonoBehaviour
                         break;
                 }
             }
-            
+            // Record the change
+            gameMgr.OnRecordScreenState();
 
-            
+
         }
         else if (signafier == ServerToClientSignifier.VerifyConnection)
         {
@@ -565,6 +566,7 @@ public class NetworkedClient : MonoBehaviour
 
                 // Server response status (the text on screen above the board)
                 r.serverResponse = boardData[9];
+                r.timeRecorded = float.Parse(boardData[10]);
 
                 string[] textData = gameData[1].Split('|');
                 foreach (string s in textData)

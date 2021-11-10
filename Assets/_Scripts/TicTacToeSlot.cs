@@ -25,7 +25,6 @@ public class TicTacToeSlot : MonoBehaviour
             displayText.text = characterinslot.ToString();
             gameMgr.OnUpdateBoard();
             
-            
         }
     }
     public void _Reset()

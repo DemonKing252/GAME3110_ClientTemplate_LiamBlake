@@ -42,6 +42,7 @@ public enum GameResult
 [System.Serializable]
 public class Record
 {
+    public float timeRecorded = 0f;
     public char[] slots = new char[9]
     {
         ' ',
@@ -70,8 +71,8 @@ public class Record
         {
             temp += s.ToString() + "|";
         }
-        temp += serverResponse + "|+";
-        foreach(string m in messages)
+        temp += serverResponse + "|" + timeRecorded.ToString("F2") + "|+";
+        foreach (string m in messages)
         {
             temp += m + "|";
         }
@@ -87,7 +88,6 @@ public class GameManager : MonoBehaviour
     // Only if were in replay mode
     public int activeRecordingIndex = -1;
     public int index = 0;
-    public float recordRate = 0.5f;
     public GameObject inputFieldUserName;
     public GameObject inputFieldPassword;
 
@@ -173,6 +173,16 @@ public class GameManager : MonoBehaviour
     public bool connectionSuccessful = false;
     public GameObject recordingTextsParent;
     public bool gameOn = true;
+
+    [SerializeField]
+    private float timeSinceStart = 0f;
+
+    // Determine if we should be increasing the timer for replaying.
+    [HideInInspector]
+    private bool elapseTime = false;
+
+    [SerializeField]
+    private float replayingTimer = 0f;
 
     // Start is called before the first frame update
     void Start()
@@ -262,6 +272,7 @@ public class GameManager : MonoBehaviour
         go.GetComponent<Text>().text = " " + msg;
 
         textMessages.Add(go);
+        OnRecordScreenState();
     }
     public GameResult CheckGameResult()
     {
@@ -440,6 +451,7 @@ public class GameManager : MonoBehaviour
 
             netclient.boardGameView._Reset();
             ClearTextMessages();
+
         }
         else if (newState == GameStates.ConnectingToHost)
         {
@@ -509,6 +521,7 @@ public class GameManager : MonoBehaviour
             currentRecordIndex = 0;
             replayScale = 1f;
             recordingPaused = false;
+            replayingTimer = 0f;
 
             replayHeader.text = "Replaying - Recording #" + activeRecordingIndex.ToString() + " by " + netclient.recordings[activeRecordingIndex].username + " on " + netclient.recordings[activeRecordingIndex].timeRecorded;
 
@@ -520,8 +533,11 @@ public class GameManager : MonoBehaviour
         if (netclient.isObserver)
             return;
 
+
+
+        elapseTime = false;
         isRecording = false;
-        // Record the last frame in case it was missed
+        // Record the last frame
         OnRecordScreenState();
         CancelInvoke("OnRecordScreenState");
 
@@ -600,9 +616,12 @@ public class GameManager : MonoBehaviour
     }
     public void StartRecording()
     {
+        elapseTime = true;
         recordViews.Clear();
-        InvokeRepeating("OnRecordScreenState", 0f, recordRate);
 
+        // Record the initial state of the board
+        OnRecordScreenState();
+        
     }
 
     // Record the state of our game.
@@ -623,6 +642,7 @@ public class GameManager : MonoBehaviour
         {
             r.messages.Add(go.GetComponent<Text>().text);
         }
+        r.timeRecorded = timeSinceStart;
 
         recordViews.Add(r);
 
@@ -659,9 +679,9 @@ public class GameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.R))
+        if (elapseTime)
         {
-            netclient.SendMessageToHost(144.ToString() + "," + netclient.recordings[0].records[index].GetParsedData());
+            timeSinceStart += Time.deltaTime;
         }
     }
     
@@ -713,63 +733,72 @@ public class GameManager : MonoBehaviour
 
     public void ReplayUpdate()
     {
-        try 
+        
+        // Determine what recording we should be at, given the 'replayingTimer' variable
+        
+        activeRecording = netclient.recordings[activeRecordingIndex];
+        
+        Record lastRecord = activeRecording.records[activeRecording.records.Count - 1];
+        
+        replayingTimer += Time.deltaTime * replayScale;
+        replayingTimer = Mathf.Clamp(replayingTimer, 0f, lastRecord.timeRecorded);
+        
+        
+        // We don't have to check for reverse conditions if were not reversing or vise versa.
+        if (replayScale > 0f && currentRecordIndex + 1 <= activeRecording.records.Count - 1)
         {
-            // We don't have to worry about delta time here, because fixed update will sync our play back anyway!
-            // Unity is very generous
+            if (replayingTimer >= activeRecording.records[currentRecordIndex + 1].timeRecorded)            
+                currentRecordIndex++;
             
-
-            activeRecording = netclient.recordings[activeRecordingIndex];
-
-            recordCounter += recordRate * replayScale;
-
-            recordCounter = Mathf.Clamp(recordCounter, 0, (float)(activeRecording.records.Count - 1));
-            currentRecordIndex = (int)recordCounter;
-
-            float secondsNow = (float)currentRecordIndex / (recordRate * 60f);
-            float totalSeconds = (float)activeRecording.records.Count / (recordRate * 60f);
-
-
-            replayTime.text = GetFormattedTime(secondsNow) + " / " + GetFormattedTime(totalSeconds);
-
-            // Update board
-            Record currentRecord = activeRecording.records[currentRecordIndex];
-
-            // Board status
-            for (int i = 0; i < 9; i++)
-                netclient.boardRecordView.slots[i].SetSlot(currentRecord.slots[i]);
-
-            GameObject[] gos = GameObject.FindGameObjectsWithTag("RecordedTextContent");
-
-            // Catch up to the ammount of messages we have in this record
-            // There is new messages that is on this EXACT record, we need to iterate and spawn
-            // the ones that were missing.
-            if (currentRecord.messages.Count != gos.Length)
-            {
-
-                // start on the index after current record
-                int startIndex = gos.Length; 
-                
-                for (int i = startIndex; i < currentRecord.messages.Count; i++)
-                {
-                    if (currentRecord.messages[i] == string.Empty)
-                        continue;
-
-                    GameObject go = Instantiate(textPrefab, recordingTextsParent.transform);
-                    go.GetComponent<Text>().text = currentRecord.messages[i];
-                    go.tag = "RecordedTextContent";
-                }
-            }
-
-
-            // Board session header (the text above the tic tac toe board)
-            serverSesionStatus.text = currentRecord.serverResponse;
-
         }
-        catch(System.Exception e) 
+        else if (replayScale < 0f && currentRecordIndex - 1 >= 0)
         {
-            Debug.LogError("EXCEPTION when replaying: " + e.Message);
+            if (replayingTimer <= activeRecording.records[currentRecordIndex - 1].timeRecorded)
+                currentRecordIndex--;
         }
+        
+
+        // Now we update the board and the message chat
+        
+        float secondsNow = replayingTimer;
+        float totalSeconds = lastRecord.timeRecorded;
+        
+        
+        replayTime.text = GetFormattedTime(secondsNow) + " / " + GetFormattedTime(totalSeconds);
+        
+        // Update board
+        Record currentRecord = activeRecording.records[currentRecordIndex];
+        
+        // Board status
+        for (int i = 0; i < 9; i++)
+            netclient.boardRecordView.slots[i].SetSlot(currentRecord.slots[i]);
+        
+        GameObject[] gos = GameObject.FindGameObjectsWithTag("RecordedTextContent");
+        
+        // Catch up to the ammount of messages we have in this record
+        // There is new messages that is on this EXACT record, we need to iterate and spawn
+        // the ones that were missing. 
+        if (currentRecord.messages.Count != gos.Length)
+        {
+        
+            // start on the index after current record
+            int startIndex = gos.Length; 
+            
+            for (int i = startIndex; i < currentRecord.messages.Count; i++)
+            {
+                if (currentRecord.messages[i] == string.Empty)
+                    continue;
+        
+                GameObject go = Instantiate(textPrefab, recordingTextsParent.transform);
+                go.GetComponent<Text>().text = currentRecord.messages[i];
+                go.tag = "RecordedTextContent";
+            }
+        }
+        
+        
+        // Board session header (the text above the tic tac toe board)
+        serverSesionStatus.text = currentRecord.serverResponse;
+    
     }
     public string GetFormattedTime(float secs)
     {
