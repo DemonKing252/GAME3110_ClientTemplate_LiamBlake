@@ -82,7 +82,7 @@ public static class CreateResponse
     public const int Success = 10001;
     public const int UsernameTaken = 10002;
 }
-
+// This HAS to be serialized so i can set the slots from the inspector
 [System.Serializable]
 public class BoardView
 {
@@ -97,7 +97,6 @@ public class BoardView
     }
 
 }
-[System.Serializable]
 public class Sessions
 {
     public int index;
@@ -108,7 +107,6 @@ public class Sessions
 
 }
 
-[System.Serializable]
 public class Recording
 {
     public string username;   // username that this was recorded from
@@ -550,33 +548,11 @@ public class NetworkedClient : MonoBehaviour
             {
                 string[] gameData = data[index].Split('+');
 
-                string[] boardData = gameData[0].Split('|');
                 Record r = new Record();
-
-                // using index 0 will allow you to get the character in the string (index 0)
-                r.slots[0] = boardData[0][0];  // characters
-                r.slots[1] = boardData[1][0];  // characters
-                r.slots[2] = boardData[2][0];  // characters
-                r.slots[3] = boardData[3][0];  // characters
-                r.slots[4] = boardData[4][0];  // characters
-                r.slots[5] = boardData[5][0];  // characters
-                r.slots[6] = boardData[6][0];  // characters
-                r.slots[7] = boardData[7][0];  // characters
-                r.slots[8] = boardData[8][0];  // characters
-
-                // Server response status (the text on screen above the board)
-                r.serverResponse = boardData[9];
-                r.timeRecorded = float.Parse(boardData[10]);
-
-                string[] textData = gameData[1].Split('|');
-                foreach (string s in textData)
-                {
-                    r.messages.Add(s);
-                }
-
-                index++;
+                r.DeSerializeData(gameData);
 
                 tempRecords.Add(r);
+                index++;
             }
         }
         else if (signafier == ServerToClientSignifier.QueueEndOfRecord)

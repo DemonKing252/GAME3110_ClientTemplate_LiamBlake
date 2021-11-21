@@ -39,7 +39,6 @@ public enum GameResult
     NothingDetermined
 
 }
-[System.Serializable]
 public class Record
 {
     public float timeRecorded = 0f;
@@ -64,7 +63,7 @@ public class Record
         messages = new List<string>();
         Assert.IsTrue(slots.Length == 9, "Error in GameManager.cs: Slot length has to be 9!");
     }
-    public string GetParsedData()
+    public string SerializeData()
     {
         string temp = "";
         foreach(char s in slots)
@@ -78,6 +77,32 @@ public class Record
         }
 
         return temp;
+    }
+    public void DeSerializeData(string[] gameData)
+    {
+        string[] boardData = gameData[0].Split('|');
+
+        // using index 0 will allow you to get the character in the string (index 0)
+        slots[0] = boardData[0][0];  // characters
+        slots[1] = boardData[1][0];  // characters
+        slots[2] = boardData[2][0];  // characters
+        slots[3] = boardData[3][0];  // characters
+        slots[4] = boardData[4][0];  // characters
+        slots[5] = boardData[5][0];  // characters
+        slots[6] = boardData[6][0];  // characters
+        slots[7] = boardData[7][0];  // characters
+        slots[8] = boardData[8][0];  // characters
+
+        // Server response status (the text on screen above the board)
+        serverResponse = boardData[9];
+        timeRecorded = float.Parse(boardData[10]);
+
+        string[] textData = gameData[1].Split('|');
+        foreach (string s in textData)
+        {
+            messages.Add(s);
+        }
+
     }
     // Client view
 }
@@ -253,6 +278,7 @@ public class GameManager : MonoBehaviour
         msg = msg.Replace(',', ' ');
         msg = msg.Replace('+', ' ');
         msg = msg.Replace('|', ' ');
+        msg = msg.Replace('=', ' ');
 
         // needed if the user decides to click the button
         sendmsg = user + ": " + msg;
@@ -598,7 +624,7 @@ public class GameManager : MonoBehaviour
             // We can have seperated values inside other seperated values.
             // a comma will seperate the records, while a '|' will seperate the board slots themselves
             foreach (Record r in tempRecords)                
-                msg += r.GetParsedData() + ",";
+                msg += r.SerializeData() + ",";
 
 
             // and now we can send it to the server
