@@ -549,7 +549,7 @@ public class NetworkedClient : MonoBehaviour
                 string[] gameData = data[index].Split('+');
 
                 Record r = new Record();
-                r.DeSerializeData(gameData);
+                r.DeserializeData(gameData);
 
                 tempRecords.Add(r);
                 index++;

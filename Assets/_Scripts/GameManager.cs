@@ -78,7 +78,7 @@ public class Record
 
         return temp;
     }
-    public void DeSerializeData(string[] gameData)
+    public void DeserializeData(string[] gameData)
     {
         string[] boardData = gameData[0].Split('|');
 
